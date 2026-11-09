@@ -7,6 +7,8 @@
 //     키가 없거나 불러오기에 실패하면 예시 데이터로 자동 표시돼요
 //
 
+/*
+저는 집에 가고싶어요 다들 저와 똑같은 생각을 가지고 있다고 생각 중이에요 */
 import SwiftUI
 import MapKit
 import CoreLocation
