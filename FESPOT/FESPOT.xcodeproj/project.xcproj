@@ -11,8 +11,21 @@
     ],
   },
   "files": [
-    { "kind": "folder", "path": "FESPOT", "target-membership": [ "FESPOT" ] },
     {
+      "kind": "folder",
+      "path": "FESPOT",
+      "target-membership": [
+        "FESPOT",
+      ],
+      "membership-exceptions": [
+        {
+          "target": "FESPOT",
+          "exclusions": [
+            "Info.plist",
+          ],
+        },
+      ],
+    }, {
       "kind": "group",
       "name": "Products",
       "children": [
@@ -39,6 +52,8 @@
         "DEVELOPMENT_TEAM": "6R3M7VGRP2",
         "ENABLE_PREVIEWS": "YES",
         "GENERATE_INFOPLIST_FILE": "YES",
+        "INFOPLIST_FILE": "FESPOT/Info.plist",
+        "INFOPLIST_KEY_LSApplicationCategoryType": "",
         "INFOPLIST_KEY_UIApplicationSceneManifest_Generation": "YES",
         "INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents": "YES",
         "INFOPLIST_KEY_UILaunchScreen_Generation": "YES",

@@ -35,10 +35,11 @@ extension Color {
 }
 
 enum EventCategory: String, CaseIterable, Identifiable, Codable {
-    case festival = "축제", concert = "공연", exhibit = "전시", market = "플리마켓", food = "먹거리", night = "야경"
+    case festival = "축제", concert = "공연", exhibit = "전시", market = "플리마켓", food = "먹거리", night = "야경", experience = "체험"
     var id: String { rawValue }
     var color: Color {
         switch self {
+        case .experience: return Color(rgb: 0x7B61FF)
         case .festival: return .coral
         case .concert: return Color(rgb: 0x3B6FE0)
         case .exhibit: return Color(rgb: 0x129A8F)
@@ -49,6 +50,7 @@ enum EventCategory: String, CaseIterable, Identifiable, Codable {
     }
     var icon: String {
         switch self {
+        case .experience: return "hands.sparkles.fill"
         case .festival: return "flag.fill"
         case .concert: return "music.note"
         case .exhibit: return "photo.artframe"
@@ -84,9 +86,11 @@ struct EventItem: Identifiable, Hashable {
     var allDay: Bool = false       // TourAPI 행사: 날짜만 있고 운영 시간은 없음
     var startNote: String = ""     // 예: "11.20"
     var untilNote: String = ""     // 예: "11.30"
+    var subType: String = ""       // 세부 유형 예: "뮤지컬", "커피", "박람회"
 
     var coordinate: CLLocationCoordinate2D { CLLocationCoordinate2D(latitude: latitude, longitude: longitude) }
     func isOpen(on day: Day, hour: Int) -> Bool { days.contains(day) && (allDay || (hour >= startHour && hour < endHour)) }
+    var typeLabel: String { subType.isEmpty || subType == category.rawValue ? category.rawValue : "\(category.rawValue) · \(subType)" }
     var contentId: String? { id.hasPrefix("tour-") ? String(id.dropFirst(5)) : nil }   // TourAPI 행사만
     var hoursText: String { allDay ? "행사 기간 중 (세부 시간은 주최 측 확인)" : "\(startHour):00 – \(endHour):00" }
 }
@@ -252,6 +256,7 @@ enum TourAPI {
         let mapy: String?
         let eventstartdate: String?
         let eventenddate: String?
+        let cat3: String?              // 관광공사 분류 코드 (예: A02080300 = 뮤지컬)
     }
     // items가 비면 "" 문자열로 오는 경우가 있어서 직접 풀기
     struct Items: Decodable {
@@ -297,14 +302,15 @@ enum TourAPI {
                   let lon = Double(f.mapx ?? ""), let lat = Double(f.mapy ?? ""), lat > 0 else { return nil }
             let dot = DateFormatter(); dot.dateFormat = "M.d"
             let full = DateFormatter(); full.dateFormat = "yyyy.MM.dd"
+            let kind = classify(title: f.title, cat3: f.cat3)
             return EventItem(
-                id: "tour-\(f.contentid)", title: f.title, category: guessCategory(f.title),
+                id: "tour-\(f.contentid)", title: f.title, category: kind.0,
                 region: regionName(f.addr1 ?? ""), place: f.addr1 ?? "주소 정보 없음",
                 latitude: lat, longitude: lon, days: daysOpen(from: sd, to: ed),
                 startHour: 10, endHour: 22,
                 period: "\(full.string(from: sd)) – \(full.string(from: ed))", price: "상세 정보 확인",
                 posterURL: f.firstimage?.replacingOccurrences(of: "http://", with: "https://"),
-                allDay: true, startNote: dot.string(from: sd), untilNote: dot.string(from: ed))
+                allDay: true, startNote: dot.string(from: sd), untilNote: dot.string(from: ed), subType: kind.1)
         }
     }
 
@@ -393,14 +399,44 @@ enum TourAPI {
         return result
     }
 
-    static func guessCategory(_ t: String) -> EventCategory {
-        func has(_ ws: [String]) -> Bool { ws.contains { t.contains($0) } }
-        if has(["불꽃", "야경", "빛", "야간", "별빛", "등불", "랜턴"]) { return .night }
-        if has(["마켓", "장터", "시장", "플리"]) { return .market }
-        if has(["음악", "재즈", "콘서트", "공연", "뮤직", "버스킹", "페스티벌 인"]) { return .concert }
-        if has(["전시", "아트", "미술", "사진", "박람회"]) { return .exhibit }
-        if has(["음식", "먹거리", "푸드", "커피", "맥주", "와인", "김치", "한우", "막걸리", "떡"]) { return .food }
-        return .festival
+    // ---------- 분류 ----------
+    // ① 관광공사 분류 코드로 확실한 것(공연·전시)은 그대로
+    static let cat3Map: [String: (EventCategory?, String)] = [
+        "A02070100": (nil, "문화관광축제"), "A02070200": (nil, "일반축제"),
+        "A02080100": (.concert, "전통공연"), "A02080200": (.concert, "연극"), "A02080300": (.concert, "뮤지컬"),
+        "A02080400": (.concert, "오페라"), "A02080500": (.exhibit, "전시회"), "A02080600": (.exhibit, "박람회"),
+        "A02080800": (.concert, "무용"), "A02080900": (.concert, "클래식"), "A02081000": (.concert, "콘서트"),
+        "A02081100": (.concert, "영화"), "A02081200": (.experience, "스포츠"), "A02081300": (nil, "기타행사")
+    ]
+    // ② 축제·기타는 제목 키워드로 세분화 (많이 걸린 쪽 승리, 동점이면 위쪽 우선)
+    static let keywords: [(EventCategory, [String])] = [
+        (.food, ["먹거리", "음식", "푸드", "미식", "맛", "커피", "맥주", "와인", "막걸리", "전통주", "김치", "한우", "떡", "빵", "디저트",
+                 "치맥", "대게", "굴", "전어", "젓갈", "인삼", "사과", "딸기", "감귤", "곶감", "송이", "꽃게", "새우", "산채", "한과", "고추", "마늘", "김장", "밤 "]),
+        (.market, ["마켓", "장터", "플리", "바자", "벼룩", "야시장", "직거래"]),
+        (.night, ["불꽃", "야경", "빛", "야간", "별빛", "등불", "유등", "연등", "등축제", "랜턴", "일루미", "루미나", "드론쇼", "라이트"]),
+        (.concert, ["음악", "뮤직", "재즈", "콘서트", "공연", "뮤지컬", "연극", "국악", "오케스트라", "버스킹", "락", "록", "힙합", "클래식",
+                    "가요제", "댄스", "탈춤", "풍물", "마당극", "판소리"]),
+        (.exhibit, ["전시", "아트", "미술", "사진", "박람회", "비엔날레", "엑스포", "특별전", "갤러리", "디자인", "도서", "책"]),
+        (.experience, ["체험", "클래스", "만들기", "공방", "원데이", "캠프", "마라톤", "걷기", "트레킹", "레이스", "보드게임", "게임"])
+    ]
+    static func keywordCategory(_ t: String) -> (EventCategory, String)? {
+        var best: (EventCategory, String, Int)? = nil
+        for (c, words) in keywords {
+            let hits = words.filter { t.contains($0) }
+            if let first = hits.first, hits.count > (best?.2 ?? 0) {
+                best = (c, first.trimmingCharacters(in: .whitespaces), hits.count)
+            }
+        }
+        return best.map { ($0.0, $0.1) }
+    }
+    // ③ 그래도 "축제"로 남으면 어떤 축제인지 세부 이름만 붙이기
+    static let festivalSub = ["벚꽃", "국화", "단풍", "꽃", "눈꽃", "얼음", "눈", "머드", "물", "해맞이", "해돋이", "문화제", "민속", "전통", "불교", "역사"]
+    static func classify(title: String, cat3: String?) -> (EventCategory, String) {
+        let mapped = cat3.flatMap { cat3Map[$0] }
+        if let m = mapped, let c = m.0 { return (c, m.1) }               // 공연·전시 코드는 확실
+        if let k = keywordCategory(title) { return k }                   // 축제 → 먹거리·야경·마켓·체험…
+        if let sub = festivalSub.first(where: { title.contains($0) }) { return (.festival, sub) }
+        return (.festival, mapped?.1 ?? "")
     }
 
     static func regionName(_ addr: String) -> String {
@@ -500,6 +536,9 @@ struct MapHomeView: View {
     @State private var hour: Int? = nil                  // nil = 지금 이 순간
     @State private var showTime = false
     @State private var selected: EventItem? = nil
+    @State private var focusedID: String? = nil           // 검색으로 고른 행사 (핀 강조)
+    @State private var searchTask: Task<Void, Never>? = nil
+    @FocusState private var searching: Bool
 
     var timeLabel: String { hour == nil ? "\(day.rawValue) · 지금" : "\(day.rawValue) · \(hour!)시" }
 
@@ -515,9 +554,31 @@ struct MapHomeView: View {
     var shown: [EventItem] {
         store.events
             .filter { picked == nil || $0.category == picked }
-            .filter { query.isEmpty || $0.title.contains(query) || $0.place.contains(query) || $0.region.contains(query) }
+            .filter { query.isEmpty || matches($0, query) }
             .filter { runsThatDay($0) }
             .filter { !openOnly || isOpen($0) }
+    }
+
+    // 이름·장소·지역·종류·세부유형 어디든 걸리면 검색 결과
+    func matches(_ e: EventItem, _ q: String) -> Bool {
+        let t = q.trimmingCharacters(in: .whitespaces)
+        return [e.title, e.place, e.region, e.category.rawValue, e.subType].contains { $0.localizedCaseInsensitiveContains(t) }
+    }
+
+    // 검색 결과 위치로 지도 이동: 1개면 그곳으로 확대, 여러 개면 전부 보이게
+    func moveCamera(to list: [EventItem]) {
+        guard !list.isEmpty else { return }
+        if list.count == 1 {
+            withAnimation(.easeInOut(duration: 0.6)) {
+                position = .region(MKCoordinateRegion(center: list[0].coordinate, latitudinalMeters: 1500, longitudinalMeters: 1500))
+            }
+            return
+        }
+        let lats = list.map(\.latitude), lons = list.map(\.longitude)
+        let center = CLLocationCoordinate2D(latitude: (lats.min()! + lats.max()!) / 2, longitude: (lons.min()! + lons.max()!) / 2)
+        let span = MKCoordinateSpan(latitudeDelta: max(0.02, (lats.max()! - lats.min()!) * 1.5),
+                                    longitudeDelta: max(0.02, (lons.max()! - lons.min()!) * 1.5))
+        withAnimation(.easeInOut(duration: 0.6)) { position = .region(MKCoordinateRegion(center: center, span: span)) }
     }
 
     var body: some View {
@@ -526,9 +587,21 @@ struct MapHomeView: View {
             ForEach(shown) { e in
                 let open = isOpen(e)
                 Annotation(e.title, coordinate: e.coordinate, anchor: .center) {
-                    Button { selected = e } label: { EventPin(category: e.category, live: open, dimmed: !open) }
-                        .buttonStyle(.plain)
+                    Button { selected = e } label: {
+                        EventPin(category: e.category, live: open, dimmed: !open, highlighted: focusedID == e.id)
+                    }
+                    .buttonStyle(.plain)
                 }
+            }
+        }
+        // 타자를 멈추고 0.6초 지나면 자동으로 결과 위치로 이동
+        .onChange(of: query) { _, q in
+            searchTask?.cancel()
+            focusedID = nil
+            guard !q.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+            searchTask = Task {
+                try? await Task.sleep(for: .milliseconds(600))
+                if !Task.isCancelled { moveCamera(to: shown) }
             }
         }
         .mapStyle(.standard(pointsOfInterest: .excludingAll))
@@ -558,15 +631,54 @@ struct MapHomeView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass").foregroundStyle(Color.inkSub)
-                TextField("어디서 뭐 하지? 행사·장소·지역 검색", text: $query)
+                TextField("행사·장소·지역·종류 검색 (예: 뮤지컬, 커피, 부산)", text: $query)
+                    .focused($searching)
+                    .submitLabel(.search)
+                    .onSubmit { moveCamera(to: shown); searching = false }
                 if !query.isEmpty {
-                    Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Color.inkSub) }
+                    Button { query = ""; focusedID = nil } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Color.inkSub) }
                         .accessibilityLabel("검색어 지우기")
                 }
             }
             .padding(.horizontal, 14).frame(height: 50)
             .background(.white, in: RoundedRectangle(cornerRadius: 16))
             .shadow(color: .black.opacity(0.1), radius: 8, y: 3)
+
+            // 검색 결과 목록 → 누르면 그 행사 위치로 이동 + 핀 강조
+            if searching && !query.isEmpty {
+                VStack(spacing: 0) {
+                    if shown.isEmpty {
+                        Text("검색 결과가 없어요").font(.subheadline).foregroundStyle(Color.inkSub)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(14)
+                    }
+                    ForEach(shown.prefix(6)) { e in
+                        Button {
+                            focusedID = e.id
+                            searching = false
+                            moveCamera(to: [e])
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: e.category.icon).font(.subheadline).foregroundStyle(.white)
+                                    .frame(width: 32, height: 32)
+                                    .background(e.category.color, in: Circle())
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(e.title).font(.subheadline.bold()).foregroundStyle(Color.ink)
+                                        .lineLimit(1).truncationMode(.tail)
+                                    Text("\(e.typeLabel) · \(e.region)").font(.caption).foregroundStyle(Color.inkSub).lineLimit(1)
+                                }
+                                Spacer()
+                                Image(systemName: "location.fill").font(.caption).foregroundStyle(Color.inkSub)
+                            }
+                            .padding(.horizontal, 14).padding(.vertical, 10)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        Divider().padding(.leading, 58)
+                    }
+                }
+                .background(.white, in: RoundedRectangle(cornerRadius: 16))
+                .shadow(color: .black.opacity(0.1), radius: 8, y: 3)
+            }
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -665,6 +777,7 @@ struct EventPin: View {
     let category: EventCategory
     let live: Bool
     var dimmed: Bool = false
+    var highlighted: Bool = false
     var body: some View {
         ZStack(alignment: .topTrailing) {
             Image(systemName: category.icon)
@@ -678,8 +791,13 @@ struct EventPin: View {
                     .overlay(Circle().stroke(.white, lineWidth: 2))
             }
         }
-        .opacity(dimmed ? 0.55 : 1)
-        .scaleEffect(dimmed ? 0.85 : 1)
+        .opacity(dimmed && !highlighted ? 0.55 : 1)
+        .scaleEffect(highlighted ? 1.35 : (dimmed ? 0.85 : 1))
+        .background(
+            Circle().fill(category.color.opacity(highlighted ? 0.25 : 0))
+                .frame(width: 70, height: 70)
+        )
+        .animation(.spring(response: 0.35), value: highlighted)
         .accessibilityLabel("\(category.rawValue)\(live ? ", 열려 있음" : "")")
     }
 }
@@ -765,7 +883,7 @@ struct PosterCard: View {
                 .accessibilityLabel("찜하기")
                 .padding(6)
             }
-            Text("\(event.category.rawValue) · \(event.region)").font(.caption.bold()).foregroundStyle(event.category.color)
+            Text("\(event.typeLabel) · \(event.region)").font(.caption.bold()).foregroundStyle(event.category.color)
                 .lineLimit(1)
             Text(event.title).font(.subheadline.bold()).foregroundStyle(Color.ink)
                 .lineLimit(1).truncationMode(.tail)          // 길면 "…"
@@ -875,7 +993,7 @@ struct EventDetailView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("\(event.category.rawValue) · \(event.region)").font(.caption.bold())
+                    Text("\(event.typeLabel) · \(event.region)").font(.caption.bold())
                         .padding(.horizontal, 10).padding(.vertical, 4)
                         .background(event.category.color.opacity(0.15), in: Capsule())
                         .foregroundStyle(Color.ink)
