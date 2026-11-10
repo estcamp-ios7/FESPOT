@@ -543,6 +543,7 @@ struct ContentView: View {
     @StateObject private var store = EventStore()
     @StateObject private var location = LocationManager()
     @State private var tab: AppTab = .map
+    @AppStorage("didOnboard") private var didOnboard = false     // 첫 실행 질문을 봤는지
 
     var body: some View {
         TabView(selection: $tab) {
@@ -560,6 +561,11 @@ struct ContentView: View {
         .environmentObject(location)
         .onAppear { location.request() }
         .task { await store.loadFestivals() }
+        // 첫 실행이면 관심 카테고리 질문 화면 (OnboardingView.swift)
+        .fullScreenCover(isPresented: Binding(get: { !didOnboard }, set: { _ in })) {
+            OnboardingView { didOnboard = true }
+                .environmentObject(store)
+        }
     }
 }
 
@@ -889,16 +895,6 @@ struct RegionPicksView: View {
         }
     }
 
-    var sortHint: String {
-        switch sort {
-        case .interest:
-            return store.profile.interests.isEmpty ? "내 정보에서 관심 분야를 고르면 반영돼요"
-                : "\(store.profile.interests.map(\.rawValue).joined(separator: " · ")) 먼저"
-        case .distance: return location.coordinate == nil ? "위치를 몰라서 성수 기준으로 정렬했어요" : "내 위치에서 가까운 순"
-        case .date: return "시작일이 빠른 순"
-        }
-    }
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -912,7 +908,6 @@ struct RegionPicksView: View {
                 }
                 // 정렬: 오른쪽 ≡ 버튼
                 HStack {
-                    Text(sortHint).font(.caption).foregroundStyle(Color.inkSub).lineLimit(1)
                     Spacer()
                     Menu {
                         Picker("정렬", selection: $sort) {
