@@ -89,6 +89,8 @@ struct EventItem: Identifiable, Hashable {
     var subType: String = ""       // 세부 유형 예: "뮤지컬", "커피", "박람회"
     var startDate: Date? = nil     // D-day 계산용 (TourAPI)
     var endDate: Date? = nil
+    var showTime: String? = nil    // 공연 시간 안내 (있으면 운영 시간에 표시)
+    var extraImageURLs: [String] = []   // 처음부터 받은 소개 이미지
 
     var coordinate: CLLocationCoordinate2D { CLLocationCoordinate2D(latitude: latitude, longitude: longitude) }
     func isOpen(on day: Day, hour: Int) -> Bool { days.contains(day) && (allDay || (hour >= startHour && hour < endHour)) }
@@ -96,7 +98,7 @@ struct EventItem: Identifiable, Hashable {
     var dateRange: String { allDay ? (startNote == untilNote ? startNote : "\(startNote) – \(untilNote)") : period }
     var typeLabel: String { subType.isEmpty || subType == category.rawValue ? category.rawValue : "\(category.rawValue) · \(subType)" }
     var contentId: String? { id.hasPrefix("tour-") ? String(id.dropFirst(5)) : nil }   // TourAPI 행사만
-    var hoursText: String { allDay ? "행사 기간 중 (세부 시간은 주최 측 확인)" : "\(startHour):00 – \(endHour):00" }
+    var hoursText: String { allDay ? (showTime ?? "행사 기간 중 (세부 시간은 주최 측 확인)") : "\(startHour):00 – \(endHour):00" }
 }
 
 // D-day · 마감 배지: 시작 전 "D-5" / 진행 중 "진행 중" / 3일 이내 마감 "마감 D-2" / 마지막 날 "오늘 마감"
@@ -260,23 +262,32 @@ final class EventStore: ObservableObject {
     // 행사 목록: 처음엔 예시, TourAPI 성공하면 실데이터로 교체
     @Published var events: [EventItem] = sampleEvents
     @Published var dataNote = "예시 데이터"
+    @Published var cultureNote = "아직 안 불러옴"      // 한국문화정보원 진단 문구
     @Published var loading = false
 
     @MainActor
     func loadFestivals() async {
         guard !loading else { return }
-        guard let key = Bundle.main.object(forInfoDictionaryKey: "TOUR_API_KEY") as? String, !key.isEmpty else {
-            dataNote = "예시 데이터 (TOUR_API_KEY 없음)"; return
-        }
         loading = true
         defer { loading = false }
-        do {
-            let real = try await TourAPI.fetchFestivals(serviceKey: key)
-            if real.isEmpty { dataNote = "예시 데이터 (불러온 행사 0개)"; return }
-            events = real
-            dataNote = "TourAPI 실데이터 \(real.count)개"
-        } catch {
-            dataNote = "예시 데이터 (불러오기 실패: \(error.localizedDescription))"
+        if let key = TourAPI.serviceKey {
+            do {
+                let real = try await TourAPI.fetchFestivals(serviceKey: key)
+                if real.isEmpty { dataNote = "예시 데이터 (불러온 행사 0개)" }
+                else { events = real; dataNote = "TourAPI 실데이터 \(real.count)개" }
+            } catch {
+                dataNote = "예시 데이터 (불러오기 실패: \(error.localizedDescription))"
+            }
+        } else {
+            dataNote = "예시 데이터 (TOUR_API_KEY 없음)"
+        }
+        // 공연·전시 더하기 (CultureService.swift · 한국문화정보원, 같은 공공데이터포털 키)
+        let culture = await Culture.fetchEvents()
+        cultureNote = Culture.lastStatus
+        if !culture.isEmpty {
+            let have = Set(events.map(\.id))
+            events += culture.filter { !have.contains($0.id) }
+            dataNote += " + 공연·전시 \(culture.count)개"
         }
     }
 }
@@ -404,6 +415,48 @@ enum TourAPI {
               let row = env.response.body?.items?.item.first else { return (nil, nil) }
         return (firstLink(row.homepage), cleanText(row.overview))
     }
+    // ---------- 행사 소개정보 (detailIntro2, 행사 타입 = 15) ----------
+    struct IntroRow: Decodable {
+        let playtime: String?              // 공연·운영 시간
+        let usetimefestival: String?       // 이용 요금
+        let discountinfofestival: String?  // 할인 정보
+        let sponsor1: String?              // 주최
+        let sponsor1tel: String?           // 주최 연락처
+        let agelimit: String?              // 관람 가능 연령
+        let eventplace: String?            // 행사 장소
+        let spendtimefestival: String?     // 관람 소요 시간
+        let bookingplace: String?          // 예매처
+        let program: String?               // 행사 프로그램
+    }
+    struct FestivalIntro {
+        var playtime, fee, discount, host, hostTel, age, place, duration, booking, program: String?
+    }
+    static func fetchIntro(contentId: String, key: String) async -> FestivalIntro? {
+        guard let u = makeURL("detailIntro2", ["contentId=\(contentId)", "contentTypeId=15"], key: key),
+              let res = try? await URLSession.shared.data(from: u),
+              let env = try? JSONDecoder().decode(Env<IntroRow>.self, from: res.0),
+              let r = env.response.body?.items?.item.first else { return nil }
+        return FestivalIntro(playtime: cleanText(r.playtime), fee: cleanText(r.usetimefestival),
+                             discount: cleanText(r.discountinfofestival), host: cleanText(r.sponsor1),
+                             hostTel: cleanText(r.sponsor1tel), age: cleanText(r.agelimit),
+                             place: cleanText(r.eventplace), duration: cleanText(r.spendtimefestival),
+                             booking: cleanText(r.bookingplace), program: cleanText(r.program))
+    }
+    // "10:00~18:00", "19시~21시" 같은 글에서 시작 시각 꺼내기 (못 찾으면 nil)
+    static func startTime(from text: String?) -> (hour: Int, minute: Int)? {
+        guard let t = text else { return nil }
+        let ns = t as NSString
+        let range = NSRange(location: 0, length: ns.length)
+        if let re = try? NSRegularExpression(pattern: #"(\d{1,2})\s*:\s*(\d{2})"#),
+           let m = re.firstMatch(in: t, range: range),
+           let h = Int(ns.substring(with: m.range(at: 1))), let mi = Int(ns.substring(with: m.range(at: 2))),
+           h < 24, mi < 60 { return (h, mi) }
+        if let re = try? NSRegularExpression(pattern: #"(\d{1,2})\s*시"#),
+           let m = re.firstMatch(in: t, range: range),
+           let h = Int(ns.substring(with: m.range(at: 1))), h < 24 { return (h, 0) }
+        return nil
+    }
+
     // homepage는 <a href="...">...</a> 같은 HTML로 와서 주소만 꺼냄
     static func firstLink(_ html: String?) -> URL? {
         guard let h = html else { return nil }
@@ -522,6 +575,7 @@ func meters(_ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D) -> Double 
 }
 // 2km 이하 = 도보(4.5km/h) · 20km 이하 = 시내 차량(25km/h) · 그 이상 = 장거리 차량(70km/h)
 func distanceText(_ m: Double) -> String {
+    if m > 3_000_000 { return "위치 정보 없음" }               // 좌표 없는 행사
     let d = m < 1000 ? "\(Int(m))m" : (m < 100_000 ? String(format: "%.1fkm", m / 1000) : String(format: "%.0fkm", m / 1000))
     if m <= 2_000 { return "도보 \(minutesText(m / 75)) · \(d)" }
     if m <= 20_000 { return "차로 \(minutesText(m / 416)) · \(d)" }
@@ -587,6 +641,8 @@ struct MapHomeView: View {
     @State private var focusedID: String? = nil           // 검색으로 고른 행사 (핀 강조)
     @State private var searchTask: Task<Void, Never>? = nil
     @FocusState private var searching: Bool
+    @State private var notice: String? = nil              // 칩 누르면 잠깐 뜨는 안내 ("체험 8곳")
+    @State private var noticeTask: Task<Void, Never>? = nil
 
     var timeLabel: String { hour == nil ? "\(day.rawValue) · 지금" : "\(day.rawValue) · \(hour!)시" }
 
@@ -604,6 +660,7 @@ struct MapHomeView: View {
             .filter { picked == nil || $0.category == picked }
             .filter { query.isEmpty || matches($0, query) }
             .filter { runsThatDay($0) }
+            .filter { $0.latitude != 0 }                       // 위치 없는 행사는 지도에서만 빼기
             .filter { !openOnly || isOpen($0) }
     }
 
@@ -611,6 +668,36 @@ struct MapHomeView: View {
     func matches(_ e: EventItem, _ q: String) -> Bool {
         let t = q.trimmingCharacters(in: .whitespaces)
         return [e.title, e.place, e.region, e.category.rawValue, e.subType].contains { $0.localizedCaseInsensitiveContains(t) }
+    }
+
+    // 칩 선택 → 내 주변(10km)에 있으면 그것들, 없으면 전국 것들이 다 보이게 이동 + 개수 안내
+    func showPicked() {
+        let me = location.coordinate ?? defaultCenter
+        guard let c = picked else {                                     // "전체" → 전국 행사가 전부 보이게 줌아웃
+            let all = shown
+            moveCamera(to: all)
+            flash(all.isEmpty ? "오늘 열리는 행사가 없어요" : "전체 \(all.count)곳")
+            return
+        }
+        let list = shown
+        if list.isEmpty {
+            let all = store.events.filter { $0.category == c && runsThatDay($0) }
+            flash(all.isEmpty ? "오늘 열리는 \(c.rawValue) 행사가 없어요"
+                              : "\(c.rawValue) \(all.count)곳은 위치 정보가 없어요 · 추천 탭에서 볼 수 있어요")
+            return
+        }
+        let near = list.filter { meters(me, $0.coordinate) < 10_000 }
+        moveCamera(to: near.isEmpty ? list : near)
+        flash(near.isEmpty ? "\(c.rawValue) \(list.count)곳 (전국)" : "내 주변 \(c.rawValue) \(near.count)곳")
+    }
+    func flash(_ text: String?) {
+        noticeTask?.cancel()
+        withAnimation { notice = text }
+        guard text != nil else { return }
+        noticeTask = Task {
+            try? await Task.sleep(for: .seconds(2.5))
+            if !Task.isCancelled { withAnimation { notice = nil } }
+        }
     }
 
     // 검색 결과 위치로 지도 이동: 1개면 그곳으로 확대, 여러 개면 전부 보이게
@@ -642,6 +729,8 @@ struct MapHomeView: View {
                 }
             }
         }
+        // 카테고리 칩을 누르면 그 행사들이 있는 곳으로 지도 이동 (화면 밖에 있어서 안 보이던 문제 해결)
+        .onChange(of: picked) { _, _ in showPicked() }
         // 타자를 멈추고 0.6초 지나면 자동으로 결과 위치로 이동
         .onChange(of: query) { _, q in
             searchTask?.cancel()
@@ -750,6 +839,13 @@ struct MapHomeView: View {
                 }
                 .buttonStyle(.plain)
                 Spacer()
+                if let n = notice {                                    // 잠깐 뜨는 안내
+                    Text(n).font(.caption.bold()).foregroundStyle(.white)
+                        .lineLimit(1)
+                        .padding(.horizontal, 12).frame(height: 32)
+                        .background(Color.ink.opacity(0.85), in: Capsule())
+                        .transition(.opacity.combined(with: .move(edge: .trailing)))
+                }
             }
         }
         .padding(.horizontal, 16).padding(.top, 6)
@@ -875,6 +971,19 @@ struct RegionPicksView: View {
 
     var me: CLLocationCoordinate2D { location.coordinate ?? defaultCenter }
 
+    // 행사가 있는 지역만 칩으로: 우리 동네 먼저 → 행사 많은 순 (0개 지역은 숨김)
+    var regionChips: [(name: String, count: Int)] {
+        let counts = Dictionary(grouping: store.events, by: \.region).mapValues(\.count)
+        return counts
+            .filter { $0.key != "기타" && $0.value > 0 }
+            .map { (name: $0.key, count: $0.value) }
+            .sorted {
+                if ($0.name == store.profile.sido) != ($1.name == store.profile.sido) { return $0.name == store.profile.sido }
+                return $0.count != $1.count ? $0.count > $1.count : $0.name < $1.name
+            }
+    }
+    var defaultRegion: String { regionChips.first?.name ?? store.profile.sido }
+
     var list: [EventItem] {
         let base = store.events.filter { $0.region == region }
         switch sort {
@@ -900,8 +1009,9 @@ struct RegionPicksView: View {
             VStack(alignment: .leading, spacing: 16) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(sidoList, id: \.self) { r in
-                            Chip(label: r == store.profile.sido ? "\(r) · 우리 동네" : r, on: region == r) { region = r }
+                        ForEach(regionChips, id: \.name) { c in
+                            Chip(label: c.name == store.profile.sido ? "📍\(c.name) \(c.count)" : "\(c.name) \(c.count)",
+                                 on: region == c.name) { region = c.name }
                         }
                     }
                     .padding(.horizontal, 16)
@@ -941,7 +1051,10 @@ struct RegionPicksView: View {
         }
         .background(Color.paper)
         .navigationTitle("지역별 추천 행사")
-        .onAppear { if region.isEmpty { region = store.profile.sido } }
+        .onAppear { if region.isEmpty { region = defaultRegion } }
+        .onChange(of: store.events.count) { _, _ in                     // 데이터 새로 받으면 빈 지역이면 바꿔주기
+            if !regionChips.contains(where: { $0.name == region }) { region = defaultRegion }
+        }
         .refreshable { await store.loadFestivals() }
     }
 }
@@ -1031,12 +1144,14 @@ struct EventDetailView: View {
     @State private var extraImages: [String] = []  // TourAPI 홍보 이미지들
     @State private var homepage: URL?
     @State private var overview: String?
+    @State private var intro: TourAPI.FestivalIntro?      // 운영 시간 · 요금 · 주최 등
+    @State private var loadingExtra = false
     @State private var showAllOverview = false
 
     // 첫 장 = 대표 포스터, 그다음 = 관광공사에 올라온 홍보 이미지 (중복 제외). nil = 자동 생성 포스터
     var gallery: [String?] {
         var arr: [String?] = [event.posterURL]
-        for u in extraImages where u != event.posterURL && !arr.contains(u) { arr.append(u) }
+        for u in event.extraImageURLs + extraImages where u != event.posterURL && !arr.contains(u) { arr.append(u) }
         return arr
     }
 
@@ -1106,12 +1221,45 @@ struct EventDetailView: View {
                 .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.gray.opacity(0.2)))
 
                 VStack(alignment: .leading, spacing: 10) {
-                    InfoRow(label: "운영", value: event.hoursText)
+                    HStack {
+                        Text("행사 정보").font(.headline)
+                        if loadingExtra { ProgressView().scaleEffect(0.8) }
+                    }
+                    InfoRow(label: "운영", value: intro?.playtime ?? event.hoursText)
                     if !event.allDay {
                         InfoRow(label: "요일", value: Day.allCases.filter { event.days.contains($0) }.map(\.rawValue).joined(separator: " · "))
                     }
                     InfoRow(label: "기간", value: event.period)
-                    InfoRow(label: "요금", value: event.price)
+                    if let v = intro?.place { InfoRow(label: "장소", value: v) }
+                    InfoRow(label: "요금", value: intro?.fee ?? event.price)
+                    if let v = intro?.discount { InfoRow(label: "할인", value: v) }
+                    if let v = intro?.age { InfoRow(label: "연령", value: v) }
+                    if let v = intro?.duration { InfoRow(label: "소요", value: v) }
+                    if let v = intro?.booking { InfoRow(label: "예매", value: v) }
+                    if let host = intro?.host {
+                        HStack(alignment: .top, spacing: 12) {
+                            InfoRow(label: "주최", value: host)
+                            Spacer(minLength: 0)
+                            if let tel = intro?.hostTel,
+                               let url = URL(string: "tel:" + tel.filter { $0.isNumber }) {
+                                Link(destination: url) {                                   // 탭하면 전화
+                                    Label("전화", systemImage: "phone.fill").font(.caption.bold())
+                                        .padding(.horizontal, 10).padding(.vertical, 5)
+                                        .background(Color.liveGreen.opacity(0.12), in: Capsule())
+                                        .foregroundStyle(Color.liveText)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(16)
+                .background(.white, in: RoundedRectangle(cornerRadius: 18))
+
+                if let prog = intro?.program {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("프로그램").font(.headline)
+                        Text(prog).font(.subheadline).foregroundStyle(Color.ink).lineLimit(6)
+                    }
                 }
 
                 if let ov = overview {
@@ -1204,13 +1352,34 @@ struct EventDetailView: View {
 
     // TourAPI 행사면 홍보 이미지 · 소개글 · 홈페이지를 추가로 불러오기
     func loadExtra() async {
+        if event.id.hasPrefix("culture-") { await loadCultureExtra(); return }   // 공연·전시는 따로
         guard let cid = event.contentId, let key = TourAPI.serviceKey else { return }
+        loadingExtra = true
         async let imgs = TourAPI.fetchImages(contentId: cid, key: key)
         async let info = TourAPI.fetchCommon(contentId: cid, key: key)
-        let (i, c) = await (imgs, info)
+        async let detail = TourAPI.fetchIntro(contentId: cid, key: key)      // 3개를 동시에 요청
+        let (i, c, d) = await (imgs, info, detail)
         extraImages = i
         homepage = c.homepage
         overview = c.overview
+        intro = d
+        loadingExtra = false
+    }
+
+    // 한국문화정보원 상세: 가격 · 문의 · 홈페이지 · 소개 · 이미지 · 주소
+    func loadCultureExtra() async {
+        guard let key = Culture.serviceKey else { return }
+        loadingExtra = true
+        let seq = String(event.id.dropFirst("culture-".count))
+        if let d = await Culture.fetchDetail(seq: seq, key: key) {
+            intro = TourAPI.FestivalIntro(playtime: nil, fee: d.price, discount: nil,
+                                          host: d.phone == nil ? nil : "문의", hostTel: d.phone,
+                                          age: nil, place: d.address, duration: nil, booking: nil, program: nil)
+            homepage = d.link
+            overview = d.contents
+            if let img = d.image { extraImages = [img] }
+        }
+        loadingExtra = false
     }
 
     func openDirections() {
@@ -1221,9 +1390,12 @@ struct EventDetailView: View {
 
     // 시작 30분 전 알림 (오늘 열리는 행사만)
     func scheduleReminder() {
-        guard !event.allDay else { alertText = "운영 시간 정보가 없는 행사라 시작 알림을 걸 수 없어요"; return }
+        let start: (hour: Int, minute: Int)? = event.allDay
+            ? TourAPI.startTime(from: intro?.playtime ?? event.showTime)   // "18:00~22:00" · "(19:30)"에서 시작 시각 찾기
+            : (hour: event.startHour, minute: 0)
+        guard let st = start else { alertText = "운영 시간 정보가 없는 행사라 시작 알림을 걸 수 없어요"; return }
         guard event.days.contains(.today) else { alertText = "오늘은 열리지 않는 행사예요"; return }
-        let fire = event.startHour * 60 - 30
+        let fire = st.hour * 60 + st.minute - 30
         guard fire > nowMinutes() else { alertText = "이미 시작했거나 30분도 안 남았어요"; return }
         Task {
             let ok = (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])) ?? false
@@ -1489,6 +1661,7 @@ struct MeView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("행사 데이터").font(.subheadline.bold())
                         Text(store.dataNote).font(.caption).foregroundStyle(Color.inkSub)
+                        Text("공연·전시: \(store.cultureNote)").font(.caption2).foregroundStyle(Color.inkSub)
                     }
                     Spacer()
                     if store.loading { ProgressView() }
