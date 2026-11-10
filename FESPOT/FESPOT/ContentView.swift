@@ -125,6 +125,20 @@ extension EventItem {
     }
 }
 
+// 이 행사가 속한 모든 카테고리: 대표 카테고리 + 제목·세부유형 키워드로 찾은 것 + 제목에 "축제"류가 있으면 축제
+// 예) "진안고원 김치보쌈축제" → [먹거리, 축제]  /  "한강 달빛 야시장" → [플리마켓, 야경]
+extension EventItem {
+    var tags: Set<EventCategory> {
+        var t: Set<EventCategory> = [category]
+        let text = title + " " + subType
+        for (c, words) in TourAPI.keywords where words.contains(where: { text.contains($0) }) { t.insert(c) }
+        if ["축제", "페스티벌", "페스타", "festival", "Festival", "FESTIVAL"].contains(where: { title.contains($0) }) {
+            t.insert(.festival)
+        }
+        return t
+    }
+}
+
 struct BadgeView: View {
     let badge: EventBadge
     var body: some View {
@@ -657,9 +671,8 @@ struct MapHomeView: View {
 
     var shown: [EventItem] {
         store.events
-            .filter { picked == nil || $0.category == picked }
+            .filter { e in picked.map { e.tags.contains($0) } ?? true }   // 행사가 가진 카테고리 중 하나라도 맞으면
             .filter { query.isEmpty || matches($0, query) }
-            .filter { runsThatDay($0) }
             .filter { $0.latitude != 0 }                       // 위치 없는 행사는 지도에서만 빼기
             .filter { !openOnly || isOpen($0) }
     }
@@ -676,13 +689,13 @@ struct MapHomeView: View {
         guard let c = picked else {                                     // "전체" → 전국 행사가 전부 보이게 줌아웃
             let all = shown
             moveCamera(to: all)
-            flash(all.isEmpty ? "오늘 열리는 행사가 없어요" : "전체 \(all.count)곳")
+            flash(all.isEmpty ? "행사가 없어요" : "전체 \(all.count)곳")
             return
         }
         let list = shown
         if list.isEmpty {
-            let all = store.events.filter { $0.category == c && runsThatDay($0) }
-            flash(all.isEmpty ? "오늘 열리는 \(c.rawValue) 행사가 없어요"
+            let all = store.events.filter { $0.tags.contains(c) }
+            flash(all.isEmpty ? "\(c.rawValue) 행사가 없어요"
                               : "\(c.rawValue) \(all.count)곳은 위치 정보가 없어요 · 추천 탭에서 볼 수 있어요")
             return
         }
@@ -723,7 +736,9 @@ struct MapHomeView: View {
                 let open = isOpen(e)
                 Annotation(e.title, coordinate: e.coordinate, anchor: .center) {
                     Button { selected = e } label: {
-                        EventPin(category: e.category, live: open, dimmed: !open, highlighted: focusedID == e.id)
+                        // 칩으로 고른 카테고리가 이 행사에 있으면 그 색·아이콘으로 표시
+                        EventPin(category: picked.flatMap { e.tags.contains($0) ? $0 : nil } ?? e.category,
+                                 live: open, dimmed: !open, highlighted: focusedID == e.id)
                     }
                     .buttonStyle(.plain)
                 }
