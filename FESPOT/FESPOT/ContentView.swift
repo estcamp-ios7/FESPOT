@@ -101,6 +101,19 @@ struct EventItem: Identifiable, Hashable {
     var hoursText: String { allDay ? (showTime ?? "행사 기간 중 (세부 시간은 주최 측 확인)") : "\(startHour):00 – \(endHour):00" }
 }
 
+// HTML 특수문자 되돌리기: "MMCA&times;LG" → "MMCA×LG", "&lt;네이처&gt;" → "<네이처>"
+extension String {
+    var htmlDecoded: String {
+        // 순서가 지켜지는 배열 (사전은 순서가 랜덤이라 안 됨) — &amp; 는 반드시 마지막
+        let map: [(String, String)] = [("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""), ("&#39;", "'"), ("&apos;", "'"),
+                   ("&times;", "×"), ("&middot;", "·"), ("&nbsp;", " "), ("&lsquo;", "‘"), ("&rsquo;", "’"),
+                   ("&ldquo;", "“"), ("&rdquo;", "”"), ("&hellip;", "…"), ("&amp;", "&")]
+        var t = self
+        for (k, v) in map { t = t.replacingOccurrences(of: k, with: v) }
+        return t
+    }
+}
+
 // D-day · 마감 배지: 시작 전 "D-5" / 진행 중 "진행 중" / 3일 이내 마감 "마감 D-2" / 마지막 날 "오늘 마감"
 struct EventBadge {
     let text: String
@@ -370,7 +383,7 @@ enum TourAPI {
             let full = DateFormatter(); full.dateFormat = "yyyy.MM.dd"
             let kind = classify(title: f.title, cat3: f.cat3)
             return EventItem(
-                id: "tour-\(f.contentid)", title: f.title, category: kind.0,
+                id: "tour-\(f.contentid)", title: f.title.htmlDecoded, category: kind.0,
                 region: regionName(f.addr1 ?? ""), place: f.addr1 ?? "주소 정보 없음",
                 latitude: lat, longitude: lon, days: daysOpen(from: sd, to: ed),
                 startHour: 10, endHour: 22,
@@ -1320,28 +1333,32 @@ struct EventDetailView: View {
                 .buttonStyle(.plain)
 
                 let nearby = store.events
-                    .filter { $0.id != event.id && meters(event.coordinate, $0.coordinate) < 2000 }
+                    .filter { $0.id != event.id && $0.latitude != 0 && meters(event.coordinate, $0.coordinate) < 2000 }
                     .sorted { meters(event.coordinate, $0.coordinate) < meters(event.coordinate, $1.coordinate) }
                 if !nearby.isEmpty {
-                    Text("여기서 걸어갈 수 있는 행사").font(.headline)
-                    ForEach(nearby) { n in
-                        NavigationLink(value: n) {
-                            HStack(spacing: 12) {
-                                Image(systemName: n.category.icon).foregroundStyle(.white)
-                                    .frame(width: 44, height: 44)
-                                    .background(n.category.color, in: RoundedRectangle(cornerRadius: 12))
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(n.title).font(.subheadline.bold()).foregroundStyle(Color.ink)
-                                    let ns = status(of: n, nowMinutes: nowMinutes())
-                                    Text("\(ns.text) · \(distanceText(meters(event.coordinate, n.coordinate)))")
-                                        .font(.caption.bold()).foregroundStyle(ns.color).lineLimit(1)
+                    // 제목: 회색 걷는 사람 픽토그램 + 근처 행사
+                    HStack(spacing: 6) {
+                        Image(systemName: "figure.walk")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(Color.gray)
+                            .accessibilityHidden(true)
+                        Text("근처 행사").font(.title3.bold()).foregroundStyle(Color.ink)
+                    }
+                    .padding(.top, 8)
+
+                    // 옆으로 넘기는 포스터 카드 (카드 탭 → 그 행사 상세로 이동)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(alignment: .top, spacing: 14) {
+                            ForEach(nearby) { n in
+                                NavigationLink(value: n) {
+                                    NearbyCard(event: n, from: event.coordinate)
                                 }
-                                Spacer()
-                                Image(systemName: "chevron.right").foregroundStyle(Color.inkSub)
+                                .buttonStyle(.plain)
                             }
                         }
-                        .buttonStyle(.plain)
+                        .padding(.horizontal, 20)
                     }
+                    .padding(.horizontal, -20)                  // 화면 끝까지 넘겨지게
                 }
             }
             .padding(20)
@@ -1547,6 +1564,50 @@ struct ZoomableImage: View {
                 .padding(24)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+}
+
+// 근처 행사 카드: 포스터 + 행사명 › + "카테고리 · 진행 여부 · 도보 거리"
+struct NearbyCard: View {
+    let event: EventItem
+    let from: CLLocationCoordinate2D
+
+    // 진행 여부를 짧게: "진행 중" / "12.11 시작" / "19시 시작" / "오늘 종료"
+    var progress: (text: String, color: Color) {
+        let st = status(of: event, nowMinutes: nowMinutes())
+        if st.isLive { return ("진행 중", .liveText) }
+        if event.allDay { return ("\(event.startNote) 시작", .soonText) }
+        return (st.text, st.color)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Color.clear
+                .aspectRatio(3/4, contentMode: .fit)
+                .overlay { PosterImage(event: event) }
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            HStack(spacing: 6) {
+                Text(event.title)
+                    .font(.subheadline.bold()).foregroundStyle(Color.ink)
+                    .lineLimit(1).truncationMode(.tail)
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right")                     // 우측 화살표
+                    .font(.subheadline.weight(.bold)).foregroundStyle(Color.ink)
+            }
+            HStack(spacing: 4) {
+                Text(event.category.rawValue).foregroundStyle(event.category.color)
+                Text("·").foregroundStyle(Color.inkSub)
+                Text(progress.text).foregroundStyle(progress.color)
+                Text("·").foregroundStyle(Color.inkSub)
+                Text(distanceText(meters(from, event.coordinate))).foregroundStyle(Color.inkSub)
+            }
+            .font(.caption.bold())
+            .lineLimit(1)
+        }
+        .frame(width: 170)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("탭하면 행사 정보로 이동")
     }
 }
 

@@ -58,7 +58,7 @@ enum Culture {
     }
 
     private static func makeEvent(_ r: [String: String]) -> EventItem? {
-        guard let seq = pick(r, ["seq"]), let title = pick(r, ["title"]),
+        guard let seq = pick(r, ["seq"]), let title = pick(r, ["title"])?.htmlDecoded,
               let sd = parseDate(pick(r, ["startDate", "startdate"])),
               let ed = parseDate(pick(r, ["endDate", "enddate"])),
               ed >= Calendar.current.startOfDay(for: Date()) else { return nil }
@@ -67,7 +67,7 @@ enum Culture {
 
         let realm = pick(r, ["realmName", "realmname"]) ?? ""
         let kind = classify(realm: realm, title: title)
-        let place = pick(r, ["place"]) ?? "장소 정보 없음"
+        let place = pick(r, ["place"])?.htmlDecoded ?? "장소 정보 없음"
         let area = pick(r, ["area", "sigungu"]) ?? place
         let full = DateFormatter(); full.dateFormat = "yyyy.MM.dd"
         let short = DateFormatter(); short.dateFormat = "M.d"
