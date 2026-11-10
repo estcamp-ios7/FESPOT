@@ -7,8 +7,6 @@
 //     키가 없거나 불러오기에 실패하면 예시 데이터로 자동 표시돼요
 //
 
-/*
-저는 집에 가고싶어요 다들 저와 똑같은 생각을 가지고 있다고 생각 중이에요 */
 import SwiftUI
 import MapKit
 import CoreLocation
@@ -89,12 +87,53 @@ struct EventItem: Identifiable, Hashable {
     var startNote: String = ""     // 예: "11.20"
     var untilNote: String = ""     // 예: "11.30"
     var subType: String = ""       // 세부 유형 예: "뮤지컬", "커피", "박람회"
+    var startDate: Date? = nil     // D-day 계산용 (TourAPI)
+    var endDate: Date? = nil
 
     var coordinate: CLLocationCoordinate2D { CLLocationCoordinate2D(latitude: latitude, longitude: longitude) }
     func isOpen(on day: Day, hour: Int) -> Bool { days.contains(day) && (allDay || (hour >= startHour && hour < endHour)) }
+    // 짧은 행사 기간 (카드용): 실데이터 "10.23 – 11.14", 예시는 기간 문구 그대로
+    var dateRange: String { allDay ? (startNote == untilNote ? startNote : "\(startNote) – \(untilNote)") : period }
     var typeLabel: String { subType.isEmpty || subType == category.rawValue ? category.rawValue : "\(category.rawValue) · \(subType)" }
     var contentId: String? { id.hasPrefix("tour-") ? String(id.dropFirst(5)) : nil }   // TourAPI 행사만
     var hoursText: String { allDay ? "행사 기간 중 (세부 시간은 주최 측 확인)" : "\(startHour):00 – \(endHour):00" }
+}
+
+// D-day · 마감 배지: 시작 전 "D-5" / 진행 중 "진행 중" / 3일 이내 마감 "마감 D-2" / 마지막 날 "오늘 마감"
+struct EventBadge {
+    let text: String
+    let color: Color
+}
+extension EventItem {
+    var badge: EventBadge? {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        guard let s = startDate, let e = endDate else {                       // 예시 데이터: 지금 열려 있으면만
+            return status(of: self, nowMinutes: nowMinutes()).isLive ? EventBadge(text: "진행 중", color: .liveGreen) : nil
+        }
+        let sd = cal.startOfDay(for: s), ed = cal.startOfDay(for: e)
+        if today < sd {
+            let n = cal.dateComponents([.day], from: today, to: sd).day ?? 0
+            return EventBadge(text: n == 1 ? "내일 시작" : "D-\(n)", color: .ink)
+        }
+        let left = cal.dateComponents([.day], from: today, to: ed).day ?? 0
+        if left <= 0 { return EventBadge(text: "오늘 마감", color: Color(rgb: 0xE5383B)) }
+        if left <= 3 { return EventBadge(text: "마감 D-\(left)", color: Color(rgb: 0xF0642A)) }
+        return EventBadge(text: "진행 중", color: .liveGreen)
+    }
+}
+
+struct BadgeView: View {
+    let badge: EventBadge
+    var body: some View {
+        HStack(spacing: 4) {
+            if badge.text.contains("마감") { Image(systemName: "alarm.fill").font(.caption2) }
+            Text(badge.text).font(.caption2.bold())
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 8).padding(.vertical, 4)
+        .background(badge.color, in: Capsule())
+    }
 }
 
 struct EventStatus {
@@ -312,7 +351,8 @@ enum TourAPI {
                 startHour: 10, endHour: 22,
                 period: "\(full.string(from: sd)) – \(full.string(from: ed))", price: "상세 정보 확인",
                 posterURL: f.firstimage?.replacingOccurrences(of: "http://", with: "https://"),
-                allDay: true, startNote: dot.string(from: sd), untilNote: dot.string(from: ed), subType: kind.1)
+                allDay: true, startNote: dot.string(from: sd), untilNote: dot.string(from: ed), subType: kind.1,
+                startDate: sd, endDate: ed)
         }
     }
 
@@ -808,15 +848,54 @@ struct EventPin: View {
 // ⑤ 지역 추천: 포스터 그리드
 // =========================================================
 
+// 추천 탭 정렬 방식
+enum PickSort: String, CaseIterable, Identifiable {
+    case date = "날짜순", distance = "거리순", interest = "추천순"      // 메뉴에 이 순서대로 보여요
+    var id: String { rawValue }
+    var icon: String {
+        switch self {
+        case .interest: return "heart.text.square"
+        case .distance: return "location"
+        case .date: return "calendar"
+        }
+    }
+}
+
 struct RegionPicksView: View {
     @EnvironmentObject var store: EventStore
+    @EnvironmentObject var location: LocationManager
     @State private var region: String = ""
+    @AppStorage("picksSort") private var sort: PickSort = .interest     // 고른 정렬 기억
+
+    var me: CLLocationCoordinate2D { location.coordinate ?? defaultCenter }
 
     var list: [EventItem] {
-        let interests = store.profile.interests
-        return store.events.filter { $0.region == region }.sorted {
-            let a = interests.contains($0.category) ? 0 : 1, b = interests.contains($1.category) ? 0 : 1
-            return a != b ? a < b : $0.title < $1.title
+        let base = store.events.filter { $0.region == region }
+        switch sort {
+        case .interest:                                   // 관심 분야 먼저 → 이름순
+            let interests = store.profile.interests
+            return base.sorted {
+                let a = interests.contains($0.category) ? 0 : 1, b = interests.contains($1.category) ? 0 : 1
+                return a != b ? a < b : $0.title < $1.title
+            }
+        case .distance:                                   // 내 위치에서 가까운 순
+            return base.sorted { meters(me, $0.coordinate) < meters(me, $1.coordinate) }
+        case .date:                                       // 시작일 빠른 순 (같으면 먼저 끝나는 순)
+            return base.sorted {
+                let s0 = $0.startDate ?? .distantFuture, s1 = $1.startDate ?? .distantFuture
+                if s0 != s1 { return s0 < s1 }
+                return ($0.endDate ?? .distantFuture) < ($1.endDate ?? .distantFuture)
+            }
+        }
+    }
+
+    var sortHint: String {
+        switch sort {
+        case .interest:
+            return store.profile.interests.isEmpty ? "내 정보에서 관심 분야를 고르면 반영돼요"
+                : "\(store.profile.interests.map(\.rawValue).joined(separator: " · ")) 먼저"
+        case .distance: return location.coordinate == nil ? "위치를 몰라서 성수 기준으로 정렬했어요" : "내 위치에서 가까운 순"
+        case .date: return "시작일이 빠른 순"
         }
     }
 
@@ -831,10 +910,27 @@ struct RegionPicksView: View {
                     }
                     .padding(.horizontal, 16)
                 }
-                if !store.profile.interests.isEmpty {
-                    Text("관심 카테고리(\(store.profile.interests.map(\.rawValue).joined(separator: ", "))) 먼저 보여드려요")
-                        .font(.caption).foregroundStyle(Color.inkSub).padding(.horizontal, 16)
+                // 정렬: 오른쪽 ≡ 버튼
+                HStack {
+                    Text(sortHint).font(.caption).foregroundStyle(Color.inkSub).lineLimit(1)
+                    Spacer()
+                    Menu {
+                        Picker("정렬", selection: $sort) {
+                            ForEach(PickSort.allCases) { Label($0.rawValue, systemImage: $0.icon).tag($0) }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(sort.rawValue).font(.subheadline.bold())
+                            Image(systemName: "line.3.horizontal").font(.subheadline.bold())
+                        }
+                        .foregroundStyle(Color.ink)
+                        .padding(.horizontal, 12).frame(height: 34)
+                        .background(Color.white, in: Capsule())
+                        .overlay(Capsule().stroke(Color.gray.opacity(0.25)))
+                    }
+                    .accessibilityLabel("정렬 방식: \(sort.rawValue)")
                 }
+                .padding(.horizontal, 16)
                 if list.isEmpty {
                     Text("이 지역은 아직 등록된 행사가 없어요").foregroundStyle(Color.inkSub)
                         .frame(maxWidth: .infinity).padding(.vertical, 40)
@@ -859,7 +955,6 @@ struct PosterCard: View {
     @EnvironmentObject var store: EventStore
     let event: EventItem
     var body: some View {
-        let st = status(of: event, nowMinutes: nowMinutes())
         VStack(alignment: .leading, spacing: 6) {
             ZStack(alignment: .topLeading) {
                 // 빈 3:4 틀을 먼저 만들고 → 그 위에 사진을 꽉 채운 뒤 → 틀 밖은 잘라냄
@@ -867,11 +962,8 @@ struct PosterCard: View {
                     .aspectRatio(3/4, contentMode: .fit)
                     .overlay { PosterImage(event: event) }
                     .clipShape(RoundedRectangle(cornerRadius: 14))
-                if st.isLive {
-                    Text("진행 중").font(.caption2.bold()).foregroundStyle(.white)
-                        .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(Color.liveGreen, in: Capsule())
-                        .padding(8)
+                if let b = event.badge {
+                    BadgeView(badge: b).padding(8)
                 }
             }
             .overlay(alignment: .topTrailing) {
@@ -889,7 +981,9 @@ struct PosterCard: View {
                 .lineLimit(1)
             Text(event.title).font(.subheadline.bold()).foregroundStyle(Color.ink)
                 .lineLimit(1).truncationMode(.tail)          // 길면 "…"
-            Text(event.place).font(.caption).foregroundStyle(Color.inkSub)
+            Label(event.dateRange, systemImage: "calendar")          // 주소 대신 행사 기간
+                .font(.caption).foregroundStyle(Color.inkSub)
+                .labelStyle(.titleAndIcon)
                 .lineLimit(1).truncationMode(.tail)
         }
     }
@@ -995,10 +1089,13 @@ struct EventDetailView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("\(event.typeLabel) · \(event.region)").font(.caption.bold())
-                        .padding(.horizontal, 10).padding(.vertical, 4)
-                        .background(event.category.color.opacity(0.15), in: Capsule())
-                        .foregroundStyle(Color.ink)
+                    HStack(spacing: 6) {
+                        Text("\(event.typeLabel) · \(event.region)").font(.caption.bold())
+                            .padding(.horizontal, 10).padding(.vertical, 4)
+                            .background(event.category.color.opacity(0.15), in: Capsule())
+                            .foregroundStyle(Color.ink)
+                        if let b = event.badge { BadgeView(badge: b) }
+                    }
                     Text(event.title).font(.title2.bold()).lineLimit(2)
                     Text("\(event.place) · \(distanceText(meters(me, event.coordinate)))")
                         .font(.subheadline).foregroundStyle(Color.inkSub)
