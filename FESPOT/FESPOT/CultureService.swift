@@ -82,7 +82,9 @@ enum Culture {
             price: "상세 정보 확인",
             posterURL: https(pick(r, ["thumbnail", "imgUrl"])),
             allDay: true, startNote: short.string(from: sd), untilNote: short.string(from: ed),
-            subType: kind.1, startDate: sd, endDate: ed)
+            subType: kind.1, startDate: sd, endDate: ed,
+            city: TourAPI.shortCity(pick(r, ["sigungu"]) ?? "").map { TourAPI.withMetro($0, sido: pick(r, ["area"]) ?? "") }
+                ?? TourAPI.cityName(addr: pick(r, ["placeAddr", "placeaddr"]), title: title))
     }
 
     // =====================================================

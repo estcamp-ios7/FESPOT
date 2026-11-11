@@ -73,7 +73,7 @@ struct EventItem: Identifiable, Hashable {
     let id: String                 // 찜 저장용 고정 아이디
     let title: String
     let category: EventCategory
-    let region: String
+    var region: String             // 포스터에서 찾으면 바로잡을 수 있게 var
     let place: String
     let latitude: Double
     let longitude: Double
@@ -91,11 +91,14 @@ struct EventItem: Identifiable, Hashable {
     var endDate: Date? = nil
     var showTime: String? = nil    // 공연 시간 안내 (있으면 운영 시간에 표시)
     var extraImageURLs: [String] = []   // 처음부터 받은 소개 이미지
+    var city: String = ""          // 시·군·구 짧은 이름 예: "남원", "양평", "종로" (없으면 빈칸)
 
     var coordinate: CLLocationCoordinate2D { CLLocationCoordinate2D(latitude: latitude, longitude: longitude) }
     func isOpen(on day: Day, hour: Int) -> Bool { days.contains(day) && (allDay || (hour >= startHour && hour < endHour)) }
     // 짧은 행사 기간 (카드용): 실데이터 "10.23 – 11.14", 예시는 기간 문구 그대로
     var dateRange: String { allDay ? (startNote == untilNote ? startNote : "\(startNote) – \(untilNote)") : period }
+    // 카드 윗줄: "남원 · 공연 · 음악" (시·군 모르면 "전북 · 공연 · 음악")
+    var placeTypeLabel: String { "\(city.isEmpty ? region : city) · \(typeLabel)" }
     var typeLabel: String { subType.isEmpty || subType == category.rawValue ? category.rawValue : "\(category.rawValue) · \(subType)" }
     var contentId: String? { id.hasPrefix("tour-") ? String(id.dropFirst(5)) : nil }   // TourAPI 행사만
     var hoursText: String { allDay ? (showTime ?? "행사 기간 중 (세부 시간은 주최 측 확인)") : "\(startHour):00 – \(endHour):00" }
@@ -316,6 +319,41 @@ final class EventStore: ObservableObject {
             events += culture.filter { !have.contains($0.id) }
             dataNote += " + 공연·전시 \(culture.count)개"
         }
+        await fillCities()
+    }
+
+    // 주소 없는 행사 → 장소 이름·제목 → 포스터 글자 순으로 시·군 찾기 (PlaceFinder.swift)
+    @MainActor
+    func fillCities() async {
+        var cache = UserDefaults.standard.dictionary(forKey: "cityCache") as? [String: String] ?? [:]   // id → "서울|종로" / "-"(못 찾음)
+        defer { UserDefaults.standard.set(cache, forKey: "cityCache") }
+
+        for i in events.indices where events[i].city.isEmpty {
+            let e = events[i]
+            if let c = cache[e.id] { apply(c, at: i); continue }
+            if let r = PlaceFinder.find(in: e.place + " " + e.title, region: e.region), !r.city.isEmpty {
+                cache[e.id] = "\(r.region)|\(r.city)"; apply(cache[e.id]!, at: i)
+            }
+        }
+        // 그래도 없으면 포스터 읽기 (한 번에 최대 40장, 결과는 저장)
+        let targets = events.filter { $0.city.isEmpty && $0.posterURL != nil && cache[$0.id] == nil }.prefix(40)
+        for e in targets {
+            guard let s = e.posterURL, let url = URL(string: s) else { continue }
+            let text = await PlaceFinder.readPoster(url) ?? ""
+            if let r = PlaceFinder.find(in: text, region: e.region) {
+                cache[e.id] = "\(r.region)|\(r.city)"
+                if let i = events.firstIndex(where: { $0.id == e.id }) { apply(cache[e.id]!, at: i) }
+            } else {
+                cache[e.id] = "-"
+            }
+        }
+    }
+
+    private func apply(_ saved: String, at i: Int) {
+        let p = saved.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+        guard p.count == 2 else { return }
+        if events[i].region == "기타" { events[i].region = p[0] }       // 지역 모르던 행사만 지역도 고침
+        if events[i].region == p[0], !p[1].isEmpty { events[i].city = p[1] }
     }
 }
 
@@ -390,7 +428,8 @@ enum TourAPI {
                 period: "\(full.string(from: sd)) – \(full.string(from: ed))", price: "상세 정보 확인",
                 posterURL: f.firstimage?.replacingOccurrences(of: "http://", with: "https://"),
                 allDay: true, startNote: dot.string(from: sd), untilNote: dot.string(from: ed), subType: kind.1,
-                startDate: sd, endDate: ed)
+                startDate: sd, endDate: ed,
+                city: cityName(addr: f.addr1, title: f.title))
         }
     }
 
@@ -559,6 +598,29 @@ enum TourAPI {
         if let k = keywordCategory(title) { return k }                   // 축제 → 먹거리·야경·마켓·체험…
         if let sub = festivalSub.first(where: { title.contains($0) }) { return (.festival, sub) }
         return (.festival, mapped?.1 ?? "")
+    }
+
+    // 시·군·구 짧은 이름: "전북특별자치도 남원시 요천로 …" → "남원" / 주소가 없으면 제목 "[남원] …" 에서
+    static func cityName(addr: String?, title: String? = nil) -> String {
+        let parts = (addr ?? "").split(separator: " ").map(String.init)
+        if parts.count >= 2, let c = shortCity(parts[1]) { return withMetro(c, sido: parts[0]) }
+        if let t = title, t.hasPrefix("["), let end = t.firstIndex(of: "]") {   // 제목 앞 [남원]
+            let inside = String(t[t.index(after: t.startIndex)..<end]).trimmingCharacters(in: .whitespaces)
+            if (2...4).contains(inside.count), !inside.allSatisfy(\.isNumber) { return shortCity(inside) ?? inside }
+        }
+        return ""
+    }
+    // 여러 광역시에 똑같이 있는 구 이름이면 앞에 도시 붙이기: "동구" → "광주 동구", "강서" → "부산 강서"
+    static let sharedGu: Set<String> = ["동구", "서구", "남구", "북구", "중구", "강서"]
+    static func withMetro(_ city: String, sido: String) -> String {
+        guard sharedGu.contains(city) else { return city }
+        let metro = regionName(sido)
+        return metro == "기타" ? city : "\(metro) \(city)"
+    }
+    // "남원시" → "남원", "양평군" → "양평", "종로구" → "종로" / "중구"처럼 짧으면 그대로
+    static func shortCity(_ w: String) -> String? {
+        guard let last = w.last, "시군구".contains(last) else { return nil }
+        return w.count >= 3 ? String(w.dropLast()) : w
     }
 
     static func regionName(_ addr: String) -> String {
@@ -829,7 +891,7 @@ struct MapHomeView: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(e.title).font(.subheadline.bold()).foregroundStyle(Color.ink)
                                         .lineLimit(1).truncationMode(.tail)
-                                    Text("\(e.typeLabel) · \(e.region)").font(.caption).foregroundStyle(Color.inkSub).lineLimit(1)
+                                    Text(e.placeTypeLabel).font(.caption).foregroundStyle(Color.inkSub).lineLimit(1)
                                 }
                                 Spacer()
                                 Image(systemName: "location.fill").font(.caption).foregroundStyle(Color.inkSub)
@@ -1114,7 +1176,7 @@ struct PosterCard: View {
                 .accessibilityLabel("찜하기")
                 .padding(6)
             }
-            Text("\(event.typeLabel) · \(event.region)").font(.caption.bold()).foregroundStyle(event.category.color)
+            Text(event.placeTypeLabel).font(.caption.bold()).foregroundStyle(event.category.color)
                 .lineLimit(1)
             Text(event.title).font(.subheadline.bold()).foregroundStyle(Color.ink)
                 .lineLimit(1).truncationMode(.tail)          // 길면 "…"
@@ -1230,7 +1292,7 @@ struct EventDetailView: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 6) {
-                        Text("\(event.typeLabel) · \(event.region)").font(.caption.bold())
+                        Text(event.placeTypeLabel).font(.caption.bold())
                             .padding(.horizontal, 10).padding(.vertical, 4)
                             .background(event.category.color.opacity(0.15), in: Capsule())
                             .foregroundStyle(Color.ink)
