@@ -67,6 +67,9 @@ struct MeView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(.white, in: RoundedRectangle(cornerRadius: 20))
 
+                // 알림 켜기/끄기 (NotificationSettingsCard.swift)
+                NotificationSettingsCard()
+
                 // 행사 데이터 상태
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {

@@ -20,9 +20,15 @@
 
 
 import SwiftUI
+import UserNotifications
 
 @main
 struct FESPOTApp: App {
+    init() {
+        // 앱을 보고 있을 때도 알림 배너가 뜨게 (Services/Notifier.swift)
+        UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()

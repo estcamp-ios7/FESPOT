@@ -64,6 +64,9 @@ final class EventStore: ObservableObject {
             events += culture.filter { !have.contains($0.id) }
             dataNote += " + 공연·전시 \(culture.count)개"
         }
+        // 새로 올라온 행사 알림 (근처 · 관심) — Services/Notifier.swift
+        await Notifier.checkNewEvents(events, profile: profile)
+        await Notifier.removeOldDeadlineAlerts()
         await fillCities()
     }
 
