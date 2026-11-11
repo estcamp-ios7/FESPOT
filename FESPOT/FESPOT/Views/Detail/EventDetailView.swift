@@ -17,6 +17,7 @@ struct EventDetailView: View {
     @EnvironmentObject var location: LocationManager
     let event: EventItem                           // 보여줄 행사 (바깥에서 넘겨받음)
     @State private var alertText: String?          // 값이 생기면 알림창이 뜸
+    @State private var showMapChoice = false       // true 면 '어떤 지도로 열까요?' 메뉴가 뜸
     @State private var page = 0                    // 지금 보고 있는 사진 번호
     @State private var fullIndex: FullIndex?       // 전체 화면으로 볼 사진 번호
     @State private var extraImages: [String] = []  // TourAPI 홍보 이미지들
@@ -167,7 +168,7 @@ struct EventDetailView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 18))
 
                 HStack(spacing: 10) {
-                    Button { openDirections() } label: {
+                    Button { showMapChoice = true } label: {
                         Label("길찾기", systemImage: "location.north.line.fill")
                             .font(.headline).frame(maxWidth: .infinity).frame(height: 52)
                             .background(Color.ink, in: RoundedRectangle(cornerRadius: 14))
@@ -228,6 +229,13 @@ struct EventDetailView: View {
         .alert(alertText ?? "", isPresented: Binding(get: { alertText != nil }, set: { if !$0 { alertText = nil } })) {
             Button("확인", role: .cancel) {}
         }
+        // 길찾기 버튼 → 아래에서 올라오는 지도 앱 선택 메뉴
+        .confirmationDialog("어떤 지도로 길찾기 할까요?", isPresented: $showMapChoice, titleVisibility: .visible) {
+            ForEach(MapApp.allCases) { app in
+                Button(app.rawValue) { openDirections(in: app) }
+            }
+            Button("취소", role: .cancel) {}
+        }
         .fullScreenCover(item: $fullIndex) { f in GalleryFullScreen(sources: gallery, start: f.id, event: event) }
         .task(id: event.id) { await loadExtra() }
     }
@@ -264,11 +272,10 @@ struct EventDetailView: View {
         loadingExtra = false
     }
 
-    // 애플 지도 앱을 열어서 도보 길찾기
-    func openDirections() {
-        let item = MKMapItem(placemark: MKPlacemark(coordinate: event.coordinate))
-        item.name = event.title
-        item.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeWalking])
+    // 고른 지도 앱으로 길찾기 (Services/Directions.swift) — 2km 이내면 도보, 더 멀면 자동차
+    func openDirections(in app: MapApp) {
+        let walk = location.coordinate.map { meters($0, event.coordinate) <= 2_000 } ?? true
+        Task { await app.open(for: event, walk: walk) }
     }
 
     // 시작 30분 전 알림 (오늘 열리는 행사만)
