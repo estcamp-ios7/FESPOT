@@ -16,7 +16,10 @@ struct MapHomeView: View {
     @EnvironmentObject var store: EventStore
     @EnvironmentObject var location: LocationManager
     // 지도가 지금 보여주는 위치·확대 정도 (바꾸면 지도가 그쪽으로 이동)
-    @State private var position: MapCameraPosition = .region(MKCoordinateRegion(center: defaultCenter, latitudinalMeters: 3500, longitudinalMeters: 3500))
+    // .userLocation: 내 위치가 잡히면 그곳을 가운데에 두고 따라가요 (지도를 손으로 움직이면 따라가기 멈춤)
+    // fallback: 위치를 아직 모르거나 권한이 없을 때 대신 보여줄 곳 (성수역 근처)
+    @State private var position: MapCameraPosition = .userLocation(
+        fallback: .region(MKCoordinateRegion(center: defaultCenter, latitudinalMeters: 3500, longitudinalMeters: 3500)))
     @State private var query = ""                        // 검색창에 친 글자
     @State private var picked: EventCategory? = nil      // nil = 전체
     @State private var openOnly = false                  // '열린 곳만' 켜짐?
@@ -29,6 +32,8 @@ struct MapHomeView: View {
     @State private var showSearch = false                // true 면 꽉 찬 검색 화면(MapSearchView)이 열림
     @State private var notice: String? = nil              // 칩 누르면 잠깐 뜨는 안내 ("체험 8곳")
     @State private var noticeTask: Task<Void, Never>? = nil
+    // 지도와 '내 위치' 버튼을 이어주는 이름표 — 버튼을 지도 밖(원하는 자리)에 따로 둘 수 있게 해줘요
+    @Namespace private var mapScope
 
     var timeLabel: String { hour == nil ? "\(day.rawValue) · 지금" : "\(day.rawValue) · \(hour!)시" }
 
@@ -101,7 +106,7 @@ struct MapHomeView: View {
 
     var body: some View {
         // $position: '$'를 붙이면 값을 읽기만 하는 게 아니라 지도가 직접 바꿀 수도 있게 연결(Binding)돼요
-        Map(position: $position) {
+        Map(position: $position, scope: mapScope) {
             UserAnnotation()
             ForEach(shown) { e in
                 let open = isOpen(e)
@@ -128,8 +133,21 @@ struct MapHomeView: View {
             }
         }
         .mapStyle(.standard(pointsOfInterest: .excludingAll))
-        .mapControls { MapUserLocationButton(); MapCompass(); MapScaleView() }
+        .mapControls { MapCompass(); MapScaleView() }            // 내 위치 버튼은 아래 overlay 에서 오른쪽 아래에 따로 둠
+        // 내 위치 버튼: 오른쪽 아래 (위치 권한 안내 배너가 뜨면 그 위로 올라가요)
+        .overlay(alignment: .bottomTrailing) {
+            MapUserLocationButton(scope: mapScope)
+                .buttonBorderShape(.circle)
+                .tint(Color.ink)
+                .controlSize(.large)
+                .padding(.trailing, 16).padding(.bottom, 16)
+        }
         .safeAreaInset(edge: .top) { topBar }
+        // 위치 권한이 꺼져 있으면 아래에 안내 + 설정 바로가기
+        .safeAreaInset(edge: .bottom) {
+            if location.denied { locationDeniedBanner }
+        }
+        .mapScope(mapScope)                                       // 지도와 버튼이 같은 이름표(mapScope)를 쓰게 묶기
         .toolbar(.hidden, for: .navigationBar)
         // 핀 탭 → 바로 상세 (아래에서 올라오는 시트)
         .sheet(item: $selected) { e in
@@ -162,6 +180,25 @@ struct MapHomeView: View {
                 })
             .environmentObject(store)
         }
+    }
+
+    // 위치 권한이 없을 때 지도 아래에 뜨는 안내
+    var locationDeniedBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "location.slash.fill").foregroundStyle(Color.coral)
+            Text("위치 권한이 꺼져 있어 내 위치를 표시할 수 없어요")
+                .font(.footnote).foregroundStyle(Color.ink)
+            Spacer(minLength: 0)
+            Button("설정") {
+                // 이 앱의 설정 화면 열기 → 사용자가 '위치'를 켤 수 있어요
+                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+            }
+            .font(.footnote.bold())
+        }
+        .padding(.horizontal, 14).padding(.vertical, 12)
+        .background(.white, in: RoundedRectangle(cornerRadius: 14))
+        .shadow(color: .black.opacity(0.1), radius: 6, y: 2)
+        .padding(.horizontal, 16).padding(.bottom, 8)
     }
 
     // 검색 · 카테고리 · 언제 · 열린 곳만

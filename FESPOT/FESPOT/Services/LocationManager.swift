@@ -14,6 +14,7 @@ import Combine
 final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     @Published var coordinate: CLLocationCoordinate2D?
+    @Published var denied = false                // 사용자가 위치 권한을 거절했거나 설정에서 꺼둠
 
     override init() {
         super.init()
@@ -29,6 +30,7 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
     // ↓ 아래 함수들은 iOS가 알아서 불러줘요 (delegate = '일이 생기면 나한테 알려줘')
     // 권한이 바뀌었을 때 (사용자가 '허용'을 누르면 여기로 옴)
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        denied = manager.authorizationStatus == .denied || manager.authorizationStatus == .restricted
         if manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways {
             manager.startUpdatingLocation()
         }
