@@ -26,7 +26,7 @@ struct MapHomeView: View {
     @State private var selected: EventItem? = nil        // 누른 핀의 행사 (값이 생기면 상세 시트가 뜸)
     @State private var focusedID: String? = nil           // 검색으로 고른 행사 (핀 강조)
     @State private var searchTask: Task<Void, Never>? = nil
-    @FocusState private var searching: Bool             // 검색창에 커서가 있나? (키보드 올라옴)
+    @State private var showSearch = false                // true 면 꽉 찬 검색 화면(MapSearchView)이 열림
     @State private var notice: String? = nil              // 칩 누르면 잠깐 뜨는 안내 ("체험 8곳")
     @State private var noticeTask: Task<Void, Never>? = nil
 
@@ -50,11 +50,8 @@ struct MapHomeView: View {
             .filter { !openOnly || isOpen($0) }
     }
 
-    // 이름·장소·지역·종류·세부유형 어디든 걸리면 검색 결과
-    func matches(_ e: EventItem, _ q: String) -> Bool {
-        let t = q.trimmingCharacters(in: .whitespaces)
-        return [e.title, e.place, e.region, e.category.rawValue, e.subType].contains { $0.localizedCaseInsensitiveContains(t) }
-    }
+    // 검색어에 걸리는지 (EventItem.matches 는 MapSearchView.swift 맨 아래에 있어요)
+    func matches(_ e: EventItem, _ q: String) -> Bool { e.matches(q) }
 
     // 칩 선택 → 내 주변(10km)에 있으면 그것들, 없으면 전국 것들이 다 보이게 이동 + 개수 안내
     func showPicked() {
@@ -123,8 +120,8 @@ struct MapHomeView: View {
         // 타자를 멈추고 0.6초 지나면 자동으로 결과 위치로 이동
         .onChange(of: query) { _, q in
             searchTask?.cancel()
-            focusedID = nil
-            guard !q.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+            guard !q.trimmingCharacters(in: .whitespaces).isEmpty else { return }   // 비워질 땐 핀 강조 유지 (결과 하나 고른 경우)
+            focusedID = nil                                                          // 새 검색어 → 이전 강조 지우기
             searchTask = Task {
                 try? await Task.sleep(for: .milliseconds(600))
                 if !Task.isCancelled { moveCamera(to: shown) }
@@ -150,17 +147,40 @@ struct MapHomeView: View {
             .environmentObject(store)
             .environmentObject(location)
         }
+        // 검색창 탭 → 화면 가득 검색 화면
+        .fullScreenCover(isPresented: $showSearch) {
+            MapSearchView(
+                initialQuery: query,
+                onSubmit: { q in                         // 키보드 '검색' · 최근 검색어 → 그 검색어로 지도 걸러 보기
+                    query = q
+                    moveCamera(to: shown)
+                },
+                onSelect: { e in                         // 결과 하나 → 검색어는 비우고 그 행사로 이동 + 핀 강조
+                    query = ""
+                    focusedID = e.id
+                    moveCamera(to: [e])
+                })
+            .environmentObject(store)
+        }
     }
 
     // 검색 · 카테고리 · 언제 · 열린 곳만
     var topBar: some View {
         VStack(alignment: .leading, spacing: 10) {
+            // 검색창 모양의 버튼 — 여기서는 글자를 치지 않고, 누르면 검색 화면이 따로 열려요
             HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass").foregroundStyle(Color.inkSub)
-                TextField("행사·장소·지역·종류 검색 (예: 뮤지컬, 커피, 부산)", text: $query)
-                    .focused($searching)
-                    .submitLabel(.search)
-                    .onSubmit { moveCamera(to: shown); searching = false }
+                Button { showSearch = true } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "magnifyingglass").foregroundStyle(Color.inkSub)
+                        Text(query.isEmpty ? "행사·장소·지역·종류 검색 (예: 뮤지컬, 커피, 부산)" : query)
+                            .foregroundStyle(query.isEmpty ? Color.inkSub : Color.ink)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(query.isEmpty ? "검색" : "검색어 \(query), 다시 검색")
                 if !query.isEmpty {
                     Button { query = ""; focusedID = nil } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Color.inkSub) }
                         .accessibilityLabel("검색어 지우기")
@@ -169,42 +189,6 @@ struct MapHomeView: View {
             .padding(.horizontal, 14).frame(height: 50)
             .background(.white, in: RoundedRectangle(cornerRadius: 16))
             .shadow(color: .black.opacity(0.1), radius: 8, y: 3)
-
-            // 검색 결과 목록 → 누르면 그 행사 위치로 이동 + 핀 강조
-            if searching && !query.isEmpty {
-                VStack(spacing: 0) {
-                    if shown.isEmpty {
-                        Text("검색 결과가 없어요").font(.subheadline).foregroundStyle(Color.inkSub)
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(14)
-                    }
-                    ForEach(shown.prefix(6)) { e in
-                        Button {
-                            focusedID = e.id
-                            searching = false
-                            moveCamera(to: [e])
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: e.category.icon).font(.subheadline).foregroundStyle(.white)
-                                    .frame(width: 32, height: 32)
-                                    .background(e.category.color, in: Circle())
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(e.title).font(.subheadline.bold()).foregroundStyle(Color.ink)
-                                        .lineLimit(1).truncationMode(.tail)
-                                    Text(e.placeTypeLabel).font(.caption).foregroundStyle(Color.inkSub).lineLimit(1)
-                                }
-                                Spacer()
-                                Image(systemName: "location.fill").font(.caption).foregroundStyle(Color.inkSub)
-                            }
-                            .padding(.horizontal, 14).padding(.vertical, 10)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        Divider().padding(.leading, 58)
-                    }
-                }
-                .background(.white, in: RoundedRectangle(cornerRadius: 16))
-                .shadow(color: .black.opacity(0.1), radius: 8, y: 3)
-            }
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
