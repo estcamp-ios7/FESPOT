@@ -1,13 +1,14 @@
 //
 //  CultureService.swift
-//  지금여기 — 한국문화정보원 '한눈에보는문화정보' 공연·전시 불러오기 (별도 파일, KOPIS 대신)
+//  FESPOT
 //
-//  사용법: Xcode → File → New → File → Swift File → 이름 CultureService → 이 내용 붙여넣기
+//  한국문화정보원 '한눈에보는문화정보' 공연·전시 불러오기 (KOPIS 대신)
+//
 //  키:    공공데이터포털에서 '한국문화정보원_한눈에보는문화정보조회서비스' 활용신청만 하면
 //         TourAPI에 쓰던 같은 인증키(TOUR_API_KEY)로 동작해요 (계정당 키 하나)
 //         다른 키를 쓰고 싶으면 Info에 CULTURE_API_KEY 를 따로 넣으면 그게 우선이에요
 //  ※ 응답이 XML이라 아래 작은 XML 해석기로 풀어서 앱의 EventItem 모양으로 바꿔요
-//  ※ EventItem, TourAPI.daysOpen / regionName / keywordCategory 는 메인 파일에 있는 걸 그대로 씀
+//  ※ EventItem 은 Models/EventItem.swift, TourAPI.daysOpen / regionName / keywordCategory 는 Services/TourAPI.swift 에 있어요
 //
 
 import Foundation

@@ -1,9 +1,12 @@
 //
 //  OnboardingView.swift
-//  지금여기 — 앱 최초 실행 시 관심 카테고리 고르기 (별도 파일)
+//  FESPOT
 //
-//  사용법: Xcode → File → New → File → Swift File → 이름 OnboardingView → 이 내용 붙여넣기
-//  ※ EventCategory, EventStore, Color.ink 등은 메인 파일(ContentView.swift)에 있는 것을 그대로 씀
+//  앱을 처음 켰을 때 딱 한 번 뜨는 '관심 카테고리 고르기' 화면
+//
+//  · 고른 카테고리는 store.profile.interests 에 저장 → 추천 탭에서 먼저 보여줘요
+//  · 다 고르면 onFinish() 를 불러서 ContentView 가 "봤음(didOnboard)" 으로 표시해요
+//  · EventCategory 는 Models/, EventStore 는 Stores/, Color.ink 등은 Design/Colors.swift 에 있어요
 //
 
 import SwiftUI
