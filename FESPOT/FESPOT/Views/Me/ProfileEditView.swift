@@ -37,7 +37,6 @@ struct ProfileEditView: View {
             }
             Section("기본 정보") {
                 TextField("닉네임", text: $draft.nickname)
-                TextField("한 줄 소개 (예: 주말마다 축제 찾아다녀요)", text: $draft.bio)
             }
             Section {
                 Picker("시·도", selection: $draft.sido) {

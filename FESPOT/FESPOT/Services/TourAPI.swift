@@ -117,7 +117,7 @@ enum TourAPI {
         let response: Resp
     }
     struct ImageRow: Decodable { let originimgurl: String?; let smallimageurl: String? }
-    struct CommonRow: Decodable { let homepage: String?; let overview: String? }
+    struct CommonRow: Decodable { let homepage: String?; let overview: String?; let tel: String? }   // tel = 문의 전화
 
     // 관광공사에 등록된 행사 이미지들 (주최 측 제공 홍보 이미지 포함)
     static func fetchImages(contentId: String, key: String) async -> [String] {
@@ -129,13 +129,13 @@ enum TourAPI {
             .map { $0.replacingOccurrences(of: "http://", with: "https://") }
     }
 
-    // 공식 홈페이지 주소 + 행사 소개글
-    static func fetchCommon(contentId: String, key: String) async -> (homepage: URL?, overview: String?) {
+    // 공식 홈페이지 주소 + 행사 소개글 + 문의 전화
+    static func fetchCommon(contentId: String, key: String) async -> (homepage: URL?, overview: String?, tel: String?) {
         guard let u = makeURL("detailCommon2", ["contentId=\(contentId)"], key: key),
               let res = try? await URLSession.shared.data(from: u),
               let env = try? JSONDecoder().decode(Env<CommonRow>.self, from: res.0),
-              let row = env.response.body?.items?.item.first else { return (nil, nil) }
-        return (firstLink(row.homepage), cleanText(row.overview))
+              let row = env.response.body?.items?.item.first else { return (nil, nil, nil) }
+        return (firstLink(row.homepage), cleanText(row.overview), cleanText(row.tel))
     }
     // ---------- 행사 소개정보 (detailIntro2, 행사 타입 = 15) ----------
     struct IntroRow: Decodable {
@@ -144,6 +144,7 @@ enum TourAPI {
         let discountinfofestival: String?  // 할인 정보
         let sponsor1: String?              // 주최
         let sponsor1tel: String?           // 주최 연락처
+        let sponsor2tel: String?           // 주관 연락처 (주최 번호가 없을 때 대신)
         let agelimit: String?              // 관람 가능 연령
         let eventplace: String?            // 행사 장소
         let spendtimefestival: String?     // 관람 소요 시간
@@ -160,7 +161,7 @@ enum TourAPI {
               let r = env.response.body?.items?.item.first else { return nil }
         return FestivalIntro(playtime: cleanText(r.playtime), fee: cleanText(r.usetimefestival),
                              discount: cleanText(r.discountinfofestival), host: cleanText(r.sponsor1),
-                             hostTel: cleanText(r.sponsor1tel), age: cleanText(r.agelimit),
+                             hostTel: cleanText(r.sponsor1tel) ?? cleanText(r.sponsor2tel), age: cleanText(r.agelimit),
                              place: cleanText(r.eventplace), duration: cleanText(r.spendtimefestival),
                              booking: cleanText(r.bookingplace), program: cleanText(r.program))
     }

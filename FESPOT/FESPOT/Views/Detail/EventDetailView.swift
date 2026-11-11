@@ -2,7 +2,8 @@
 //  EventDetailView.swift
 //  FESPOT
 //
-//  행사 상세 화면 — 사진 갤러리 · 상태 · 행사 정보 · 소개 · 지도 · 길찾기 · 시작 알림 · 근처 행사
+//  행사 상세 화면 — 사진 갤러리 · 상태 · 행사 정보 · 소개 · 지도 · 길찾기 · 근처 행사
+//  · 포스터를 탭하거나 두 손가락으로 벌리면 전체 화면에서 확대·축소할 수 있어요 (GalleryViews.swift)
 //
 //  · 화면이 열리면 .task 에서 loadExtra() 로 추가 정보(사진·소개·요금 등)를 인터넷에서 더 받아와요
 //  · TourAPI 행사(id가 "tour-"로 시작)와 공연·전시("culture-"로 시작)는 상세 정보를 받는 곳이 달라요
@@ -10,19 +11,19 @@
 
 import SwiftUI
 import MapKit
-import UserNotifications
 
 struct EventDetailView: View {
     @EnvironmentObject var store: EventStore
     @EnvironmentObject var location: LocationManager
     let event: EventItem                           // 보여줄 행사 (바깥에서 넘겨받음)
-    @State private var alertText: String?          // 값이 생기면 알림창이 뜸
     @State private var showMapChoice = false       // true 면 '어떤 지도로 열까요?' 메뉴가 뜸
+    @State private var showBigMap = false          // true 면 큰 지도(EventMapFullScreen)가 뜸
     @State private var page = 0                    // 지금 보고 있는 사진 번호
     @State private var fullIndex: FullIndex?       // 전체 화면으로 볼 사진 번호
     @State private var extraImages: [String] = []  // TourAPI 홍보 이미지들
     @State private var homepage: URL?
     @State private var overview: String?
+    @State private var commonTel: String?          // TourAPI 기본정보의 문의 전화 (주최 연락처가 없을 때 대신)
     @State private var intro: TourAPI.FestivalIntro?      // 운영 시간 · 요금 · 주최 등
     @State private var loadingExtra = false
     @State private var showAllOverview = false
@@ -40,7 +41,7 @@ struct EventDetailView: View {
         let st = status(of: event, nowMinutes: nowMinutes())
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                // 옆으로 넘기는 사진들 (탭하면 전체 화면)
+                // 옆으로 넘기는 사진들 (탭하거나 두 손가락으로 벌리면 전체 화면)
                 TabView(selection: $page) {
                     ForEach(Array(gallery.enumerated()), id: \.offset) { i, src in
                         Color.clear
@@ -48,8 +49,14 @@ struct EventDetailView: View {
                             .clipped()
                             .contentShape(Rectangle())
                             .onTapGesture { fullIndex = FullIndex(id: i) }
+                            // 두 손가락으로 벌리면 → 확대할 수 있는 전체 화면 열기
+                            .simultaneousGesture(
+                                MagnifyGesture().onEnded { v in
+                                    if v.magnification > 1.1 { fullIndex = FullIndex(id: i) }
+                                }
+                            )
                             .accessibilityAddTraits(.isButton)
-                            .accessibilityLabel("사진 \(i + 1), 전체 화면으로 보기")
+                            .accessibilityLabel("사진 \(i + 1), 전체 화면에서 확대해 보기")
                             .tag(i)
                     }
                 }
@@ -115,20 +122,21 @@ struct EventDetailView: View {
                     if let v = intro?.age { InfoRow(label: "연령", value: v) }
                     if let v = intro?.duration { InfoRow(label: "소요", value: v) }
                     if let v = intro?.booking { InfoRow(label: "예매", value: v) }
-                    if let host = intro?.host {
-                        HStack(alignment: .top, spacing: 12) {
-                            InfoRow(label: "주최", value: host)
-                            Spacer(minLength: 0)
-                            if let tel = intro?.hostTel,
-                               let url = URL(string: "tel:" + tel.filter { $0.isNumber }) {
-                                Link(destination: url) {                                   // 탭하면 전화
-                                    Label("전화", systemImage: "phone.fill").font(.caption.bold())
-                                        .padding(.horizontal, 10).padding(.vertical, 5)
-                                        .background(Color.liveGreen.opacity(0.12), in: Capsule())
-                                        .foregroundStyle(Color.liveText)
+                    if let host = intro?.host { InfoRow(label: "주최", value: host) }
+                    // API가 전화번호를 주면 → 번호를 보여주고, 누르면 전화 앱으로 (Utilities/PhoneNumber.swift)
+                    if let phone = PhoneNumber(from: intro?.hostTel) ?? PhoneNumber(from: commonTel) {
+                        HStack(alignment: .center, spacing: 12) {
+                            Text("전화").foregroundStyle(Color.inkSub).frame(width: 44, alignment: .leading)
+                            Link(destination: phone.url) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "phone.fill").font(.caption)
+                                    Text(phone.display).underline()
                                 }
+                                .foregroundStyle(Color.liveText)
                             }
+                            .accessibilityLabel("전화 걸기 \(phone.display)")
                         }
+                        .font(.subheadline)
                     }
                 }
                 .padding(16)
@@ -166,20 +174,29 @@ struct EventDetailView: View {
                 }
                 .frame(height: 150)
                 .clipShape(RoundedRectangle(cornerRadius: 18))
+                // 작은 지도는 움직이지 않고, 누르면 확대·이동되는 큰 지도가 열려요
+                .overlay {
+                    Color.clear.contentShape(Rectangle())
+                        .onTapGesture { showBigMap = true }
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.caption.bold()).foregroundStyle(.white)
+                        .frame(width: 30, height: 30)
+                        .background(.black.opacity(0.45), in: Circle())
+                        .padding(10)
+                        .allowsHitTesting(false)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("행사 위치 지도, 크게 보기")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { showBigMap = true }
 
-                HStack(spacing: 10) {
-                    Button { showMapChoice = true } label: {
-                        Label("길찾기", systemImage: "location.north.line.fill")
-                            .font(.headline).frame(maxWidth: .infinity).frame(height: 52)
-                            .background(Color.ink, in: RoundedRectangle(cornerRadius: 14))
-                            .foregroundStyle(.white)
-                    }
-                    Button { scheduleReminder() } label: {
-                        Label("시작 알림", systemImage: "bell")
-                            .font(.subheadline.bold()).frame(width: 120, height: 52)
-                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.gray.opacity(0.35)))
-                            .foregroundStyle(Color.ink)
-                    }
+                Button { showMapChoice = true } label: {
+                    Label("길찾기", systemImage: "location.north.line.fill")
+                        .font(.headline).frame(maxWidth: .infinity).frame(height: 52)
+                        .background(Color.ink, in: RoundedRectangle(cornerRadius: 14))
+                        .foregroundStyle(.white)
                 }
                 .buttonStyle(.plain)
 
@@ -226,9 +243,6 @@ struct EventDetailView: View {
                 .accessibilityLabel("찜하기")
             }
         }
-        .alert(alertText ?? "", isPresented: Binding(get: { alertText != nil }, set: { if !$0 { alertText = nil } })) {
-            Button("확인", role: .cancel) {}
-        }
         // 길찾기 버튼 → 아래에서 올라오는 지도 앱 선택 메뉴
         .confirmationDialog("어떤 지도로 길찾기 할까요?", isPresented: $showMapChoice, titleVisibility: .visible) {
             ForEach(MapApp.allCases) { app in
@@ -237,6 +251,10 @@ struct EventDetailView: View {
             Button("취소", role: .cancel) {}
         }
         .fullScreenCover(item: $fullIndex) { f in GalleryFullScreen(sources: gallery, start: f.id, event: event) }
+        .fullScreenCover(isPresented: $showBigMap) {
+            EventMapFullScreen(event: event, live: status(of: event, nowMinutes: nowMinutes()).isLive)
+                .environmentObject(location)
+        }
         .task(id: event.id) { await loadExtra() }
     }
 
@@ -252,6 +270,7 @@ struct EventDetailView: View {
         extraImages = i
         homepage = c.homepage
         overview = c.overview
+        commonTel = c.tel
         intro = d
         loadingExtra = false
     }
@@ -263,7 +282,7 @@ struct EventDetailView: View {
         let seq = String(event.id.dropFirst("culture-".count))
         if let d = await Culture.fetchDetail(seq: seq, key: key) {
             intro = TourAPI.FestivalIntro(playtime: nil, fee: d.price, discount: nil,
-                                          host: d.phone == nil ? nil : "문의", hostTel: d.phone,
+                                          host: nil, hostTel: d.phone,
                                           age: nil, place: d.address, duration: nil, booking: nil, program: nil)
             homepage = d.link
             overview = d.contents
@@ -276,30 +295,5 @@ struct EventDetailView: View {
     func openDirections(in app: MapApp) {
         let walk = location.coordinate.map { meters($0, event.coordinate) <= 2_000 } ?? true
         Task { await app.open(for: event, walk: walk) }
-    }
-
-    // 시작 30분 전 알림 (오늘 열리는 행사만)
-    func scheduleReminder() {
-        let start: (hour: Int, minute: Int)? = event.allDay
-            ? TourAPI.startTime(from: intro?.playtime ?? event.showTime)   // "18:00~22:00" · "(19:30)"에서 시작 시각 찾기
-            : (hour: event.startHour, minute: 0)
-        guard let st = start else { alertText = "운영 시간 정보가 없는 행사라 시작 알림을 걸 수 없어요"; return }
-        guard event.days.contains(.today) else { alertText = "오늘은 열리지 않는 행사예요"; return }
-        let fire = st.hour * 60 + st.minute - 30
-        guard fire > nowMinutes() else { alertText = "이미 시작했거나 30분도 안 남았어요"; return }
-        Task {
-            let ok = (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])) ?? false
-            guard ok else { alertText = "설정에서 알림을 허용해 주세요"; return }
-            let content = UNMutableNotificationContent()
-            content.title = "30분 뒤 \(event.title) 시작!"
-            content.body = "\(event.place) · 지금 출발하면 딱 맞아요"
-            content.sound = .default
-            var comps = DateComponents()
-            comps.hour = fire / 60
-            comps.minute = fire % 60
-            let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
-            try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "start-\(event.id)", content: content, trigger: trigger))
-            alertText = "\(fire / 60):\(String(format: "%02d", fire % 60))에 알려드릴게요"
-        }
     }
 }

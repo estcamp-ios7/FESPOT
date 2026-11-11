@@ -7,11 +7,13 @@
 //  · meters(a, b):     두 좌표 사이 거리(미터)
 //  · distanceText(m):  "도보 12분 · 900m" 처럼 보기 좋은 문구로
 //  · defaultCenter:    내 위치를 모를 때 쓰는 기본 위치 (성수역 근처)
+//  · seoulCenter:      앱을 켰을 때 지도가 처음 보여주는 곳 (서울시청)
 //
 
 import CoreLocation
 
 let defaultCenter = CLLocationCoordinate2D(latitude: 37.5446, longitude: 127.0560)   // 위치 모를 때: 성수역 근처
+let seoulCenter = CLLocationCoordinate2D(latitude: 37.5665, longitude: 126.9780)     // 첫 화면 지도: 서울시청
 
 func meters(_ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D) -> Double {
     CLLocation(latitude: a.latitude, longitude: a.longitude).distance(from: CLLocation(latitude: b.latitude, longitude: b.longitude))

@@ -16,10 +16,10 @@ struct MapHomeView: View {
     @EnvironmentObject var store: EventStore
     @EnvironmentObject var location: LocationManager
     // 지도가 지금 보여주는 위치·확대 정도 (바꾸면 지도가 그쪽으로 이동)
-    // .userLocation: 내 위치가 잡히면 그곳을 가운데에 두고 따라가요 (지도를 손으로 움직이면 따라가기 멈춤)
-    // fallback: 위치를 아직 모르거나 권한이 없을 때 대신 보여줄 곳 (성수역 근처)
-    @State private var position: MapCameraPosition = .userLocation(
-        fallback: .region(MKCoordinateRegion(center: defaultCenter, latitudinalMeters: 3500, longitudinalMeters: 3500)))
+    // 앱을 켜면 항상 서울(서울시청 37.5665, 126.9780)에서 시작 — 서울 시내가 한눈에 보이게 약 20km 범위
+    // 내 위치로 가고 싶으면 오른쪽 아래 '내 위치' 버튼을 누르면 돼요
+    @State private var position: MapCameraPosition = .region(
+        MKCoordinateRegion(center: seoulCenter, latitudinalMeters: 20_000, longitudinalMeters: 20_000))
     @State private var query = ""                        // 검색창에 친 글자
     @State private var picked: EventCategory? = nil      // nil = 전체
     @State private var openOnly = false                  // '열린 곳만' 켜짐?
@@ -58,12 +58,11 @@ struct MapHomeView: View {
     // 검색어에 걸리는지 (EventItem.matches 는 MapSearchView.swift 맨 아래에 있어요)
     func matches(_ e: EventItem, _ q: String) -> Bool { e.matches(q) }
 
-    // 칩 선택 → 내 주변(10km)에 있으면 그것들, 없으면 전국 것들이 다 보이게 이동 + 개수 안내
+    // 칩 선택 → 지도는 지금 자리 그대로 두고, 핀만 바꾸고 개수 안내 (확대·이동 안 함)
     func showPicked() {
         let me = location.coordinate ?? defaultCenter
-        guard let c = picked else {                                     // "전체" → 전국 행사가 전부 보이게 줌아웃
+        guard let c = picked else {                                     // "전체"
             let all = shown
-            moveCamera(to: all)
             flash(all.isEmpty ? "행사가 없어요" : "전체 \(all.count)곳")
             return
         }
@@ -75,7 +74,6 @@ struct MapHomeView: View {
             return
         }
         let near = list.filter { meters(me, $0.coordinate) < 10_000 }
-        moveCamera(to: near.isEmpty ? list : near)
         flash(near.isEmpty ? "\(c.rawValue) \(list.count)곳 (전국)" : "내 주변 \(c.rawValue) \(near.count)곳")
     }
     func flash(_ text: String?) {
@@ -120,7 +118,7 @@ struct MapHomeView: View {
                 }
             }
         }
-        // 카테고리 칩을 누르면 그 행사들이 있는 곳으로 지도 이동 (화면 밖에 있어서 안 보이던 문제 해결)
+        // 카테고리 칩을 누르면 핀만 걸러지고 개수 안내가 떠요 (지도는 움직이지 않음)
         .onChange(of: picked) { _, _ in showPicked() }
         // 타자를 멈추고 0.6초 지나면 자동으로 결과 위치로 이동
         .onChange(of: query) { _, q in

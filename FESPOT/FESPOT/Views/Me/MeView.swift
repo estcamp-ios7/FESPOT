@@ -27,7 +27,6 @@ struct MeView: View {
                         }
                         Spacer()
                     }
-                    if !p.bio.isEmpty { Text(p.bio).font(.subheadline) }
                     NavigationLink { ProfileEditView() } label: {
                         Text("프로필 편집").font(.subheadline.bold())
                             .frame(maxWidth: .infinity).frame(height: 44)
