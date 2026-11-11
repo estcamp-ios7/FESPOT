@@ -1098,6 +1098,7 @@ struct PosterCard: View {
                     .aspectRatio(3/4, contentMode: .fit)
                     .overlay { PosterImage(event: event) }
                     .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .contentShape(RoundedRectangle(cornerRadius: 14))   // 터치 영역도 포스터 틀 크기로 딱 맞춤
                 if let b = event.badge {
                     BadgeView(badge: b).padding(8)
                 }
@@ -1134,6 +1135,7 @@ struct PosterImage: View {
                 img.resizable().scaledToFill()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
+                    .allowsHitTesting(false)        // 가로로 긴 사진이 틀 밖으로 삐져나와 옆 카드 터치를 가로채지 않게
             } placeholder: { generated }
         } else {
             generated
