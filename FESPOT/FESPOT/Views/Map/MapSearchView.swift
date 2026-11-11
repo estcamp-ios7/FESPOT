@@ -73,7 +73,7 @@ struct MapSearchView: View {
                 }
             }
             .padding(.horizontal, 14).frame(height: 48)
-            .background(.white, in: RoundedRectangle(cornerRadius: 16))
+            .background(Color.card, in: RoundedRectangle(cornerRadius: 16))
             .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.gray.opacity(0.2)))
         }
         .padding(.horizontal, 16).padding(.vertical, 10)

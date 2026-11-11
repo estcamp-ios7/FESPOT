@@ -69,7 +69,7 @@ struct EventMapFullScreen: View {
             Button { dismiss() } label: {
                 Image(systemName: "xmark").font(.headline.bold()).foregroundStyle(Color.ink)
                     .frame(width: 44, height: 44)
-                    .background(.white, in: Circle())
+                    .background(Color.card, in: Circle())
                     .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
             }
             .accessibilityLabel("닫기")
@@ -79,7 +79,7 @@ struct EventMapFullScreen: View {
                 Text(event.place).font(.caption).foregroundStyle(Color.inkSub).lineLimit(1)
             }
             .padding(.horizontal, 14).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .background(.white, in: RoundedRectangle(cornerRadius: 14))
+            .background(Color.card, in: RoundedRectangle(cornerRadius: 14))
             .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
 
             Button {
@@ -87,7 +87,7 @@ struct EventMapFullScreen: View {
             } label: {
                 Image(systemName: "scope").font(.headline.bold()).foregroundStyle(Color.ink)
                     .frame(width: 44, height: 44)
-                    .background(.white, in: Circle())
+                    .background(Color.card, in: Circle())
                     .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
             }
             .accessibilityLabel("행사 위치로")
@@ -101,7 +101,7 @@ struct EventMapFullScreen: View {
             Label("길찾기", systemImage: "location.north.line.fill")
                 .font(.headline).frame(maxWidth: .infinity).frame(height: 52)
                 .background(Color.ink, in: RoundedRectangle(cornerRadius: 14))
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.onInk)
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 16).padding(.bottom, 8)       // 내 위치 버튼은 자동으로 이 버튼 바로 위에 놓여요

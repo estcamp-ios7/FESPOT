@@ -194,7 +194,7 @@ struct MapHomeView: View {
             .font(.footnote.bold())
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
-        .background(.white, in: RoundedRectangle(cornerRadius: 14))
+        .background(Color.card, in: RoundedRectangle(cornerRadius: 14))
         .shadow(color: .black.opacity(0.1), radius: 6, y: 2)
         .padding(.horizontal, 16).padding(.bottom, 8)
     }
@@ -222,7 +222,7 @@ struct MapHomeView: View {
                 }
             }
             .padding(.horizontal, 14).frame(height: 50)
-            .background(.white, in: RoundedRectangle(cornerRadius: 16))
+            .background(Color.card, in: RoundedRectangle(cornerRadius: 16))
             .shadow(color: .black.opacity(0.1), radius: 8, y: 3)
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -241,14 +241,14 @@ struct MapHomeView: View {
                         Text("열린 곳만").font(.subheadline.bold())
                     }
                     .padding(.horizontal, 14).frame(height: 36)
-                    .background(openOnly ? Color(rgb: 0xE7F6EE) : Color.white, in: Capsule())
+                    .background(openOnly ? Color.liveBg : Color.card, in: Capsule())
                     .foregroundStyle(openOnly ? Color.liveText : Color.ink)
                     .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
                 }
                 .buttonStyle(.plain)
                 Spacer()
                 if let n = notice {                                    // 잠깐 뜨는 안내
-                    Text(n).font(.caption.bold()).foregroundStyle(.white)
+                    Text(n).font(.caption.bold()).foregroundStyle(Color.onInk)
                         .lineLimit(1)
                         .padding(.horizontal, 12).frame(height: 32)
                         .background(Color.ink.opacity(0.85), in: Capsule())

@@ -22,7 +22,7 @@ enum EventCategory: String, CaseIterable, Identifiable, Codable {
         case .exhibit: return Color(rgb: 0x129A8F)
         case .market: return Color(rgb: 0xE8A317)
         case .food: return Color(rgb: 0xF08A24)
-        case .night: return Color(rgb: 0x2B3A67)
+        case .night: return Color(light: 0x2B3A67, dark: 0x5C72C0)       // 다크 모드에선 밝은 남색
         }
     }
     var icon: String {

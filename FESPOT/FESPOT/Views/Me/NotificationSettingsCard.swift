@@ -79,7 +79,7 @@ struct NotificationSettingsCard: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.white, in: RoundedRectangle(cornerRadius: 20))
+        .background(Color.card, in: RoundedRectangle(cornerRadius: 20))
         .task { denied = await Notifier.permissionDenied() }
         // 스위치를 켜면 알림 권한 묻기
         .onChange(of: nearby) { _, on in if on { askPermission() } }

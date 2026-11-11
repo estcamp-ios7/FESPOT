@@ -57,7 +57,7 @@ struct OnboardingView: View {
                         .font(.headline)
                         .frame(maxWidth: .infinity).frame(height: 54)
                         .background(picked.isEmpty ? Color.gray.opacity(0.3) : Color.ink, in: RoundedRectangle(cornerRadius: 16))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(picked.isEmpty ? Color.inkSub : Color.onInk)
                 }
                 .buttonStyle(.plain)
                 .disabled(picked.isEmpty)
@@ -111,7 +111,7 @@ struct CategoryTile: View {
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(on ? category.color.opacity(0.12) : Color.white, in: RoundedRectangle(cornerRadius: 18))
+            .background(on ? category.color.opacity(0.12) : Color.card, in: RoundedRectangle(cornerRadius: 18))
             .overlay(
                 RoundedRectangle(cornerRadius: 18)
                     .stroke(on ? category.color : Color.gray.opacity(0.2), lineWidth: on ? 2 : 1)

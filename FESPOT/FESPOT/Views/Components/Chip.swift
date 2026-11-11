@@ -17,8 +17,8 @@ struct Chip: View {
         Button(action: action) {
             Text(label).font(.subheadline.bold())
                 .padding(.horizontal, 14).frame(height: 36)
-                .background(on ? Color.ink : Color.white, in: Capsule())
-                .foregroundStyle(on ? Color.white : Color.ink)
+                .background(on ? Color.ink : Color.card, in: Capsule())
+                .foregroundStyle(on ? Color.onInk : Color.ink)
                 .overlay(Capsule().stroke(on ? Color.clear : Color.gray.opacity(0.25)))
                 .shadow(color: .black.opacity(0.06), radius: 3, y: 1)
         }

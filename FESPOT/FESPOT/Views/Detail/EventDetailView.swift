@@ -103,7 +103,7 @@ struct EventDetailView: View {
                     Spacer()
                 }
                 .padding(16)
-                .background(.white, in: RoundedRectangle(cornerRadius: 18))
+                .background(Color.card, in: RoundedRectangle(cornerRadius: 18))
                 .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.gray.opacity(0.2)))
 
                 VStack(alignment: .leading, spacing: 10) {
@@ -140,7 +140,7 @@ struct EventDetailView: View {
                     }
                 }
                 .padding(16)
-                .background(.white, in: RoundedRectangle(cornerRadius: 18))
+                .background(Color.card, in: RoundedRectangle(cornerRadius: 18))
 
                 if let prog = intro?.program {
                     VStack(alignment: .leading, spacing: 8) {
@@ -162,7 +162,7 @@ struct EventDetailView: View {
                     Link(destination: hp) {
                         Label("공식 홈페이지에서 더 보기", systemImage: "safari")
                             .font(.subheadline.bold()).frame(maxWidth: .infinity).frame(height: 46)
-                            .background(Color.white, in: RoundedRectangle(cornerRadius: 14))
+                            .background(Color.card, in: RoundedRectangle(cornerRadius: 14))
                             .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.gray.opacity(0.35)))
                             .foregroundStyle(Color.ink)
                     }
@@ -196,7 +196,7 @@ struct EventDetailView: View {
                     Label("길찾기", systemImage: "location.north.line.fill")
                         .font(.headline).frame(maxWidth: .infinity).frame(height: 52)
                         .background(Color.ink, in: RoundedRectangle(cornerRadius: 14))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.onInk)
                 }
                 .buttonStyle(.plain)
 

@@ -35,7 +35,7 @@ struct MeView: View {
                     }
                 }
                 .padding(18)
-                .background(.white, in: RoundedRectangle(cornerRadius: 20))
+                .background(Color.card, in: RoundedRectangle(cornerRadius: 20))
 
                 // 요약 숫자
                 HStack(spacing: 12) {
@@ -64,7 +64,7 @@ struct MeView: View {
                 }
                 .padding(18)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.white, in: RoundedRectangle(cornerRadius: 20))
+                .background(Color.card, in: RoundedRectangle(cornerRadius: 20))
 
                 // 알림 켜기/끄기 (NotificationSettingsCard.swift)
                 NotificationSettingsCard()
@@ -84,7 +84,7 @@ struct MeView: View {
                     }
                 }
                 .padding(18)
-                .background(.white, in: RoundedRectangle(cornerRadius: 20))
+                .background(Color.card, in: RoundedRectangle(cornerRadius: 20))
                 Text("행사 정보 출처: 한국관광공사 TourAPI").font(.caption2).foregroundStyle(Color.inkSub)
             }
             .padding(16)
@@ -103,6 +103,6 @@ struct StatBox: View {
             Text(label).font(.caption).foregroundStyle(Color.inkSub)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 14)
-        .background(.white, in: RoundedRectangle(cornerRadius: 16))
+        .background(Color.card, in: RoundedRectangle(cornerRadius: 16))
     }
 }

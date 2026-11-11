@@ -91,7 +91,7 @@ struct RegionPicksView: View {
                         }
                         .foregroundStyle(Color.ink)
                         .padding(.horizontal, 12).frame(height: 34)
-                        .background(Color.white, in: Capsule())
+                        .background(Color.card, in: Capsule())
                         .overlay(Capsule().stroke(Color.gray.opacity(0.25)))
                     }
                     .accessibilityLabel("정렬 방식: \(sort.rawValue)")

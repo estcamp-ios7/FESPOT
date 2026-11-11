@@ -33,7 +33,7 @@ struct TimeFilterSheet: View {
                 Text("이 시간으로 지도 보기").font(.headline)
                     .frame(maxWidth: .infinity).frame(height: 50)
                     .background(Color.ink, in: RoundedRectangle(cornerRadius: 14))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.onInk)
             }
             .buttonStyle(.plain)
         }
@@ -49,8 +49,8 @@ struct TimeButton: View {
         Button(action: action) {
             Text(label).font(.subheadline.bold())
                 .frame(maxWidth: .infinity, minHeight: 44)
-                .background(on ? Color.ink : Color.white, in: RoundedRectangle(cornerRadius: 12))
-                .foregroundStyle(on ? Color.white : Color.ink)
+                .background(on ? Color.ink : Color.card, in: RoundedRectangle(cornerRadius: 12))
+                .foregroundStyle(on ? Color.onInk : Color.ink)
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(on ? Color.clear : Color.gray.opacity(0.3)))
         }
         .buttonStyle(.plain)

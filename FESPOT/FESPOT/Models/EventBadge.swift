@@ -24,7 +24,7 @@ extension EventItem {
         let sd = cal.startOfDay(for: s), ed = cal.startOfDay(for: e)
         if today < sd {
             let n = cal.dateComponents([.day], from: today, to: sd).day ?? 0
-            return EventBadge(text: n == 1 ? "내일 시작" : "D-\(n)", color: .ink)
+            return EventBadge(text: n == 1 ? "내일 시작" : "D-\(n)", color: .badgeDark)
         }
         let left = cal.dateComponents([.day], from: today, to: ed).day ?? 0
         if left <= 0 { return EventBadge(text: "오늘 마감", color: Color(rgb: 0xE5383B)) }
