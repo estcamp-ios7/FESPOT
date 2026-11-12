@@ -36,6 +36,22 @@ struct EventDetailView: View {
     }
 
     var me: CLLocationCoordinate2D { location.coordinate ?? defaultCenter }
+    
+    // 원래 데이터를 조작해서 보여주는
+    // 연산프로퍼티
+    var displayProgram: String {
+        get {
+            if let program = intro?.program {
+                
+                // result는 program 문자열 안에서 "\n\n"부분을 "\n"으로 교체한 문자열
+                let result: String = program.replacingOccurrences(of: "\n\n", with: "\n")
+                
+                return result
+            } else {
+                return "(내용없음)"
+            }
+        }
+    }
 
     var body: some View {
         let st = status(of: event, nowMinutes: nowMinutes())
@@ -143,13 +159,16 @@ struct EventDetailView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.card, in: RoundedRectangle(cornerRadius: 18))
 
-                if let prog = intro?.program {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("프로그램").font(.headline)
-                        Text(prog).font(.subheadline).lineSpacing(3)
-                            .foregroundStyle(Color.ink).lineLimit(6)
-                    }.padding(.vertical, 8)
-                }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("프로그램").font(.headline)
+                    
+                    Text(displayProgram)
+                        .font(.subheadline)
+                        .lineSpacing(3)
+                        .foregroundStyle(Color.ink)
+                        .lineLimit(10)
+                    
+                }.padding(.vertical, 8)
 
                 if let ov = overview {
                     VStack(alignment: .leading, spacing: 8) {
