@@ -45,8 +45,8 @@
 
 
 ## Support version
-- Xcode 27.0
-- iOS 
+- Xcode 26.6
+- iOS 26.6
 
 ## Credits
 - [Ned Park](https://africastart.com)
