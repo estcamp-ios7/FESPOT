@@ -27,7 +27,7 @@ struct OnboardingView: View {
                         Text("Q.")
                             .font(.system(size: 28, weight: .heavy))
                             .foregroundStyle(Color.coral)
-                        Text("우선으로 보여질\n관심 카테고리를 선택해주세요!")
+                        Text("가장 먼저 볼\n관심 카테고리를 선택해주세요!")
                             .font(.system(size: 26, weight: .bold))
                             .foregroundStyle(Color.ink)
                         Text("*중복 선택 가능")

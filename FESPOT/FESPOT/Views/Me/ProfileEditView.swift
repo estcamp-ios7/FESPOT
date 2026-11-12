@@ -70,7 +70,7 @@ struct ProfileEditView: View {
                 Picker("반경", selection: $draft.radiusKm) {
                     ForEach([1, 3, 5, 10], id: \.self) { Text("\($0)km").tag($0) }
                 }
-                .pickerStyle(.segmented)
+                .pickerStyle(.menu)
             }
         }
         .navigationTitle("프로필 편집")
