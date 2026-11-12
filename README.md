@@ -45,7 +45,7 @@
 
 
 ## Support version
-- Xcode
+- Xcode 27.0
 - iOS 
 
 ## Credits
