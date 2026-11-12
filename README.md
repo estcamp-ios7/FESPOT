@@ -50,6 +50,11 @@
 
 ## Credits
 - [Ned Park](https://africastart.com)
+- 김성주
+- 이채희
+- 최은지
+- 이열매
+- 오승석
 
 ### License
 Licensed under the [MIT](LICENSE) license.
