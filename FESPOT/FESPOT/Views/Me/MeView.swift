@@ -11,7 +11,7 @@ import SwiftUI
 
 struct MeView: View {
     @EnvironmentObject var store: EventStore
-    var p: Profile { store.profile }
+    var profile: Profile { store.profile }
 
     var body: some View {
         ScrollView {
@@ -19,15 +19,15 @@ struct MeView: View {
                 // 프로필 카드
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 14) {
-                        Avatar(profile: p)
+                        Avatar(profile: profile)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(p.nickname.isEmpty ? "닉네임을 정해주세요" : p.nickname).font(.title3.bold())
-                            Label(p.detail.isEmpty ? p.sido : "\(p.sido) · \(p.detail)", systemImage: "house")
+                            Text(profile.nickname.isEmpty ? "닉네임을 정해주세요" : profile.nickname).font(.title3.bold())
+                            Label(profile.detail.isEmpty ? profile.sido : "\(profile.sido) · \(profile.detail)", systemImage: "house")
                                 .font(.subheadline).foregroundStyle(Color.inkSub)
                         }
                         Spacer()
                     }
-                    NavigationLink { ProfileEditView() } label: {
+                    NavigationLink { ProfileEditView( ) } label: {
                         Text("프로필 편집").font(.subheadline.bold())
                             .frame(maxWidth: .infinity).frame(height: 44)
                             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.35)))
@@ -40,23 +40,26 @@ struct MeView: View {
                 // 요약 숫자
                 HStack(spacing: 12) {
                     StatBox(value: "\(store.saved.count)", label: "찜한 행사")
-                    StatBox(value: "\(p.interests.count)", label: "관심 카테고리")
-                    StatBox(value: "\(p.radiusKm)km", label: "관심 반경")
+                    StatBox(value: "\(profile.interests.count)", label: "관심 카테고리")
+                    StatBox(value: "\(profile.radiusKm)km", label: "관심 반경")
                 }
 
                 // 관심 카테고리
                 VStack(alignment: .leading, spacing: 10) {
                     Text("관심 있는 행사").font(.headline)
-                    if p.interests.isEmpty {
+                    if profile.interests.isEmpty {
                         Text("프로필 편집에서 고르면 추천 탭에 먼저 보여드려요").font(.subheadline).foregroundStyle(Color.inkSub)
                     } else {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
-                                ForEach(p.interests) { c in
-                                    Label(c.rawValue, systemImage: c.icon).font(.subheadline.bold())
-                                        .padding(.horizontal, 12).frame(height: 36)
-                                        .background(c.color.opacity(0.15), in: Capsule())
+                                ForEach(profile.interests) { interest in
+                                    Label(interest.rawValue, systemImage: interest.icon)
+                                        .font(.subheadline.bold())
+                                        .padding(.horizontal, 10)
+                                         .padding(.vertical, 6)
+                                        .background(interest.color.opacity(0.15), in: Capsule())
                                         .foregroundStyle(Color.ink)
+                                        .labelIconToTitleSpacing(5)
                                 }
                             }
                         }

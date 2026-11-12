@@ -140,19 +140,22 @@ struct EventDetailView: View {
                     }
                 }
                 .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.card, in: RoundedRectangle(cornerRadius: 18))
 
                 if let prog = intro?.program {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("프로그램").font(.headline)
-                        Text(prog).font(.subheadline).foregroundStyle(Color.ink).lineLimit(6)
-                    }
+                        Text(prog).font(.subheadline).lineSpacing(3)
+                            .foregroundStyle(Color.ink).lineLimit(6)
+                    }.padding(.vertical, 8)
                 }
 
                 if let ov = overview {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("행사 소개").font(.headline)
                         Text(ov).font(.subheadline).foregroundStyle(Color.ink)
+                            .lineSpacing(3)
                             .lineLimit(showAllOverview ? nil : 5)
                         Button(showAllOverview ? "접기" : "더 보기") { withAnimation { showAllOverview.toggle() } }
                             .font(.subheadline.bold()).foregroundStyle(Color.inkSub)
@@ -296,4 +299,109 @@ struct EventDetailView: View {
         let walk = location.coordinate.map { meters($0, event.coordinate) <= 2_000 } ?? true
         Task { await app.open(for: event, walk: walk) }
     }
+}
+
+/// SwiftUI Preview에서 실제 API 데이터를 불러오기 위한 테스트 화면
+private struct EventDetailPreviewLoader: View {
+
+    @StateObject private var store = EventStore()
+    @StateObject private var location = LocationManager()
+
+    @State private var previewEvent: EventItem?
+    @State private var loading = true
+    @State private var errorMessage: String?
+
+    var body: some View {
+        Group {
+            if let event = previewEvent {
+                EventDetailView(event: event)
+                    .environmentObject(store)
+                    .environmentObject(location)
+
+            } else if loading {
+                ProgressView("실제 행사 데이터를 불러오는 중...")
+                
+            } else {
+                VStack(spacing: 12) {
+                    Text("행사 데이터를 불러오지 못했습니다.")
+                        .font(.headline)
+
+                    if let message = errorMessage {
+                        Text(message)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Button("다시 불러오기") {
+                        Task {
+                            await loadPreviewData()
+                        }
+                    }
+                }
+                .padding()
+            }
+        }
+        .task {
+            await loadPreviewData()
+        }
+    }
+
+    @MainActor
+    private func loadPreviewData() async {
+        loading = true
+        errorMessage = nil
+
+        defer {
+            loading = false
+        }
+
+        // 1. TourAPI 인증키 확인
+        guard let key = TourAPI.serviceKey else {
+            useSampleData("TOUR_API_KEY를 찾을 수 없습니다.")
+            return
+        }
+
+        do {
+            // 2. 실제 축제 및 행사 목록 API 호출
+            let apiEvents = try await TourAPI.fetchFestivals(
+                serviceKey: key
+            )
+
+            // 3. API 데이터가 있는지 확인
+            guard !apiEvents.isEmpty else {
+                useSampleData("API에서 행사 데이터를 받지 못했습니다.")
+                return
+            }
+
+            // 4. 상세 정보를 조회할 수 있는 행사 선택
+            let selectedEvent = apiEvents.first {
+                $0.contentId != nil
+            } ?? apiEvents[0]
+
+            // 5. EventStore에도 실제 API 데이터 반영
+            store.events = apiEvents
+            store.dataNote = "Preview API 데이터 \(apiEvents.count)개"
+
+            // 6. 선택한 행사 전달
+            previewEvent = selectedEvent
+
+        } catch {
+            useSampleData(
+                "API 호출 실패: \(error.localizedDescription)"
+            )
+        }
+    }
+
+    @MainActor
+    private func useSampleData(_ message: String) {
+        store.events = sampleEvents
+        store.dataNote = "Preview 예시 데이터"
+        
+        previewEvent = sampleEvents.first
+        errorMessage = message
+    }
+}
+
+#Preview("Event Detail - API") {
+    EventDetailPreviewLoader()
 }

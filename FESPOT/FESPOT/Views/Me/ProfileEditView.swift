@@ -59,6 +59,7 @@ struct ProfileEditView: View {
                                 .frame(maxWidth: .infinity, minHeight: 40)
                                 .background(on ? c.color : Color.gray.opacity(0.12), in: Capsule())
                                 .foregroundStyle(on ? Color.white : Color.ink)
+                                .labelIconToTitleSpacing(15)
                         }
                         .buttonStyle(.plain)
                     }
