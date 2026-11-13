@@ -17,7 +17,7 @@ struct SavedView: View {
             if list.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "heart").font(.largeTitle).foregroundStyle(Color.inkSub)
-                    Text("마음에 드는 행사에 ♡를 눌러 모아보세요").foregroundStyle(Color.inkSub)
+                    Text("가장 먼저볼 관심 카테고리를 선택하세요").foregroundStyle(Color.inkSub)
                 }
                 .padding(.top, 80)
             }
