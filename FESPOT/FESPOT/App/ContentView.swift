@@ -33,7 +33,8 @@ struct ContentView: View {
                 .tabItem { Label("지도", systemImage: "map") }.tag(AppTab.map)
             NavigationStack { RegionPicksView().navigationDestination(for: EventItem.self) { EventDetailView(event: $0) } }
                 .tabItem { Label("추천", systemImage: "square.grid.2x2") }.tag(AppTab.picks)
-            NavigationStack { SavedView().navigationDestination(for: EventItem.self) { EventDetailView(event: $0) } }
+            // 찜 탭이 비었을 때 [행사 둘러보기] → 추천 탭으로
+            NavigationStack { SavedView(onBrowse: { tab = .picks }).navigationDestination(for: EventItem.self) { EventDetailView(event: $0) } }
                 .tabItem { Label("찜", systemImage: "heart") }.tag(AppTab.saved)
             NavigationStack { MeView() }
                 .tabItem { Label("내 정보", systemImage: "person") }.tag(AppTab.me)
