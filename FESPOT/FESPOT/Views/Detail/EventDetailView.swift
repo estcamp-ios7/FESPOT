@@ -123,64 +123,88 @@ struct EventDetailView: View {
                 .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.gray.opacity(0.2)))
 
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Text("행사 정보").font(.headline)
-                        if loadingExtra { ProgressView().scaleEffect(0.8) }
-                    }
-                    
-                    InfoRow(label: "운영", value: intro?.playtime ?? event.hoursText)
-                    
-                    if !event.allDay {
-                        InfoRow(label: "요일", value: Day.allCases.filter { event.days.contains($0) }.map(\.rawValue).joined(separator: " · "))
-                    }
-                    
-                    InfoRow(label: "기간", value: event.period.replacingOccurrences(of: " : ", with: ": "))
-                    
-                    if let place = intro?.place {
-                        InfoRow(label: "장소", value: place.replacingOccurrences(of: " : ", with: ": "))
-                    }
-                    
-                    InfoRow(label: "요금", value: intro?.fee ?? event.price)
-                    
-                    if let discount = intro?.discount {
-                        InfoRow(label: "할인", value: discount)
-                    }
-                    
-                    if let age = intro?.age {
-                        InfoRow(label: "연령", value: age)
-                    }
-                    
-                    if let duration = intro?.duration {
-                        InfoRow(label: "소요", value: duration)
-                    }
-                    
-                    if let booking = intro?.booking {
-                        InfoRow(label: "예매", value: booking)
-                    }
-                    
-                    if let host = intro?.host {
-                        InfoRow(label: "주최", value: host)
-                    }
-                    
-                    // API가 전화번호를 주면 → 번호를 보여주고, 누르면 전화 앱으로
-                    if let phone = PhoneNumber(from: intro?.hostTel) ?? PhoneNumber(from: commonTel) {
-                        HStack(alignment: .center, spacing: 8) {
-                            Text("전화")
-                                .foregroundStyle(Color.inkSub)
-                                .frame(width: 38, alignment: .leading)
-                            
-                            Link(destination: phone.url) {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "phone.fill").font(.caption)
-                                    Text(phone.display).underline()
+                                    HStack {
+                                        Text("행사 정보").font(.headline)
+                                        if loadingExtra { ProgressView().scaleEffect(0.8) }
+                                    }
+                                    
+                                    InfoRow(label: "운영", value: {
+                                        let rawValue = intro?.playtime ?? event.hoursText
+                                        var cleaned = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                                        
+                                        // 1. 맨 앞의 "-" 제거
+                                        if cleaned.hasPrefix("-") {
+                                            cleaned.removeFirst()
+                                            cleaned = cleaned.trimmingCharacters(in: .whitespaces)
+                                        }
+                                        
+                                        // 2. 중간 "-" 기준으로 분리하여 "시간 (접수 마감: 시간)" 형태로 변경
+                                        let components = cleaned.components(separatedBy: "-")
+                                            .map { $0.trimmingCharacters(in: .whitespaces) }
+                                            .filter { !$0.isEmpty }
+                                        
+                                        if components.count >= 2 {
+                                            let mainTime = components[0]
+                                            var subInfo = components[1]
+                                            if subInfo.hasPrefix("접수 마감") && !subInfo.contains("접수 마감:") {
+                                                subInfo = subInfo.replacingOccurrences(of: "접수 마감", with: "접수 마감:")
+                                            }
+                                            return "\(mainTime) (\(subInfo))"
+                                        }
+                                        return cleaned
+                                    }())
+                                   
+                                    if !event.allDay {
+                                        InfoRow(label: "요일", value: Day.allCases.filter { event.days.contains($0) }.map(\.rawValue).joined(separator: " · "))
+                                    }
+                                   
+                                    InfoRow(label: "기간", value: event.period.replacingOccurrences(of: " : ", with: ": "))
+                                   
+                                    if let place = intro?.place {
+                                        InfoRow(label: "장소", value: place.replacingOccurrences(of: " : ", with: ": "))
+                                    }
+                                   
+                                    InfoRow(label: "요금", value: intro?.fee ?? event.price)
+                                   
+                                    if let discount = intro?.discount {
+                                        InfoRow(label: "할인", value: discount)
+                                    }
+                                   
+                                    if let age = intro?.age {
+                                        InfoRow(label: "연령", value: age)
+                                    }
+                                   
+                                    if let duration = intro?.duration {
+                                        InfoRow(label: "소요", value: duration)
+                                    }
+                                   
+                                    if let booking = intro?.booking {
+                                        InfoRow(label: "예매", value: booking)
+                                    }
+                                   
+                                    if let host = intro?.host {
+                                        InfoRow(label: "주최", value: host)
+                                    }
+                                   
+                                    // API가 전화번호를 주면 → 번호를 보여주고, 누르면 전화 앱으로
+                                    if let phone = PhoneNumber(from: intro?.hostTel) ?? PhoneNumber(from: commonTel) {
+                                        HStack(alignment: .center, spacing: 8) {
+                                            Text("전화")
+                                                .foregroundStyle(Color.inkSub)
+                                                .frame(width: 38, alignment: .leading)
+                                           
+                                            Link(destination: phone.url) {
+                                                HStack(spacing: 6) {
+                                                    Image(systemName: "phone.fill").font(.caption)
+                                                    Text(phone.display).underline()
+                                                }
+                                                .foregroundStyle(Color.liveText)
+                                            }
+                                            .accessibilityLabel("전화 걸기 \(phone.display)")
+                                        }
+                                        .font(.subheadline)
+                                    }
                                 }
-                                .foregroundStyle(Color.liveText)
-                            }
-                            .accessibilityLabel("전화 걸기 \(phone.display)")
-                        }
-                        .font(.subheadline)
-                    }
-                }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.card, in: RoundedRectangle(cornerRadius: 18))
