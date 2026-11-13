@@ -173,14 +173,10 @@ struct EventDetailView: View {
                 if let overviewText = overview {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("행사 소개").font(.headline)
-<<<<<<< Updated upstream
-                        
-                        Text(ov)
+
+                        Text(overviewText)
                             .font(.subheadline)
                             .foregroundStyle(Color.ink)
-=======
-                        Text(overviewText).font(.subheadline).foregroundStyle(Color.ink)
->>>>>>> Stashed changes
                             .lineSpacing(3)
                             .lineLimit(showAllOverview ? nil : 5)
                             .tracking(-0.3)
@@ -194,14 +190,9 @@ struct EventDetailView: View {
                         .foregroundStyle(Color.inkSub)
                     }
                 }
-<<<<<<< Updated upstream
 
-                if let hp = homepage {
-                    Link(destination: hp) {
-=======
                 if let homepageURL = homepage {
                     Link(destination: homepageURL) {
->>>>>>> Stashed changes
                         Label("공식 홈페이지에서 더 보기", systemImage: "safari")
                             .font(.subheadline.bold())
                             .frame(maxWidth: .infinity)
