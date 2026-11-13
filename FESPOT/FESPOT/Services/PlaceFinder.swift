@@ -59,8 +59,8 @@ enum PlaceFinder {
         let text = raw.replacingOccurrences(of: "\\s", with: "", options: .regularExpression)
         let known = region != "기타"
 
-        for v in venues where text.contains(v.key) && (!known || v.region == region) {
-            return (v.region, short(v.city, sido: v.region))
+        for venue in venues where text.contains(venue.key) && (!known || venue.region == region) {
+            return (venue.region, short(venue.city, sido: venue.region))
         }
         for sido in (known ? [region] : sidoOrder) {
             for full in cities[sido] ?? [] where text.contains(full) {
@@ -83,13 +83,13 @@ enum PlaceFinder {
     }
 
     nonisolated static func ocr(_ data: Data) -> String? {
-        guard let cg = UIImage(data: data)?.cgImage else { return nil }
-        let req = VNRecognizeTextRequest()
-        req.recognitionLevel = .accurate
-        req.recognitionLanguages = ["ko-KR", "en-US"]     // 한국어 인식 (iOS 16 이상)
-        req.usesLanguageCorrection = false
-        try? VNImageRequestHandler(cgImage: cg).perform([req])
-        let lines = (req.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+        guard let cgImage = UIImage(data: data)?.cgImage else { return nil }
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.recognitionLanguages = ["ko-KR", "en-US"]     // 한국어 인식 (iOS 16 이상)
+        request.usesLanguageCorrection = false
+        try? VNImageRequestHandler(cgImage: cgImage).perform([request])
+        let lines = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
         return lines.isEmpty ? nil : lines.joined(separator: " ")
     }
 }

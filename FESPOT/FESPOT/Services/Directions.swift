@@ -79,11 +79,11 @@ enum MapApp: String, CaseIterable, Identifiable {
                     : MKLaunchOptionsDirectionsModeDriving
                 ])
                 
-            } else if let q = event.place.addingPercentEncoding(
+            } else if let query = event.place.addingPercentEncoding(
                 withAllowedCharacters: .urlQueryAllowed
             ),
-                      let u = URL(string: "maps://?q=\(q)") {
-                await UIApplication.shared.open(u)
+                      let url = URL(string: "maps://?q=\(query)") {
+                await UIApplication.shared.open(url)
             }
             
             return

@@ -82,8 +82,8 @@ struct NotificationSettingsCard: View {
         .background(Color.card, in: RoundedRectangle(cornerRadius: 20))
         .task { denied = await Notifier.permissionDenied() }
         // 스위치를 켜면 알림 권한 묻기
-        .onChange(of: nearby) { _, on in if on { askPermission() } }
-        .onChange(of: interest) { _, on in if on { askPermission() } }
+        .onChange(of: nearby) { _, isEnabled in if isEnabled { askPermission() } }
+        .onChange(of: interest) { _, isEnabled in if isEnabled { askPermission() } }
     }
 
     func askPermission() {

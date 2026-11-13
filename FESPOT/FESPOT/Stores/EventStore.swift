@@ -21,14 +21,14 @@ final class EventStore: ObservableObject {
     }
     // 처음 만들 때 저장된 프로필이 있으면 꺼내고(JSON → Profile), 없으면 빈 프로필로 시작
     @Published var profile: Profile = {
-        if let d = UserDefaults.standard.data(forKey: "profile"), let p = try? JSONDecoder().decode(Profile.self, from: d) { return p }
+        if let savedData = UserDefaults.standard.data(forKey: "profile"), let savedProfile = try? JSONDecoder().decode(Profile.self, from: savedData) { return savedProfile }
         return Profile()
     }() {
-        didSet { if let d = try? JSONEncoder().encode(profile) { UserDefaults.standard.set(d, forKey: "profile") } }
+        didSet { if let encodedData = try? JSONEncoder().encode(profile) { UserDefaults.standard.set(encodedData, forKey: "profile") } }
     }
     // ♡ 버튼: 찜돼 있으면 빼고, 아니면 넣기
-    func toggleSave(_ e: EventItem) {
-        if saved.contains(e.id) { saved.remove(e.id) } else { saved.insert(e.id) }
+    func toggleSave(_ event: EventItem) {
+        if saved.contains(event.id) { saved.remove(event.id) } else { saved.insert(event.id) }
     }
 
     // 행사 목록: 처음엔 예시, TourAPI 성공하면 실데이터로 교체
@@ -76,32 +76,32 @@ final class EventStore: ObservableObject {
         var cache = UserDefaults.standard.dictionary(forKey: "cityCache") as? [String: String] ?? [:]   // id → "서울|종로" / "-"(못 찾음)
         defer { UserDefaults.standard.set(cache, forKey: "cityCache") }
 
-        for i in events.indices where events[i].city.isEmpty {
-            let e = events[i]
-            if let c = cache[e.id] { apply(c, at: i); continue }
-            if let r = PlaceFinder.find(in: e.place + " " + e.title, region: e.region), !r.city.isEmpty {
-                cache[e.id] = "\(r.region)|\(r.city)"; apply(cache[e.id]!, at: i)
+        for index in events.indices where events[index].city.isEmpty {
+            let event = events[index]
+            if let cachedValue = cache[event.id] { apply(cachedValue, at: index); continue }
+            if let found = PlaceFinder.find(in: event.place + " " + event.title, region: event.region), !found.city.isEmpty {
+                cache[event.id] = "\(found.region)|\(found.city)"; apply(cache[event.id]!, at: index)
             }
         }
         // 그래도 없으면 포스터 읽기 (한 번에 최대 40장, 결과는 저장)
         let targets = events.filter { $0.city.isEmpty && $0.posterURL != nil && cache[$0.id] == nil }.prefix(40)
-        for e in targets {
-            guard let s = e.posterURL, let url = URL(string: s) else { continue }
+        for event in targets {
+            guard let posterURLString = event.posterURL, let url = URL(string: posterURLString) else { continue }
             let text = await PlaceFinder.readPoster(url) ?? ""
-            if let r = PlaceFinder.find(in: text, region: e.region) {
-                cache[e.id] = "\(r.region)|\(r.city)"
-                if let i = events.firstIndex(where: { $0.id == e.id }) { apply(cache[e.id]!, at: i) }
+            if let found = PlaceFinder.find(in: text, region: event.region) {
+                cache[event.id] = "\(found.region)|\(found.city)"
+                if let index = events.firstIndex(where: { $0.id == event.id }) { apply(cache[event.id]!, at: index) }
             } else {
-                cache[e.id] = "-"
+                cache[event.id] = "-"
             }
         }
     }
 
-    // 저장해 둔 "서울|종로" 문자열을 잘라서 i번째 행사의 지역 · 시·군에 넣기
-    private func apply(_ saved: String, at i: Int) {
-        let p = saved.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
-        guard p.count == 2 else { return }
-        if events[i].region == "기타" { events[i].region = p[0] }       // 지역 모르던 행사만 지역도 고침
-        if events[i].region == p[0], !p[1].isEmpty { events[i].city = p[1] }
+    // 저장해 둔 "서울|종로" 문자열을 잘라서 index번째 행사의 지역 · 시·군에 넣기
+    private func apply(_ cachedValue: String, at index: Int) {
+        let parts = cachedValue.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count == 2 else { return }
+        if events[index].region == "기타" { events[index].region = parts[0] }       // 지역 모르던 행사만 지역도 고침
+        if events[index].region == parts[0], !parts[1].isEmpty { events[index].city = parts[1] }
     }
 }

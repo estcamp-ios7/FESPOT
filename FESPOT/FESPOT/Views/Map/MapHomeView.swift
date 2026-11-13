@@ -38,43 +38,43 @@ struct MapHomeView: View {
     var timeLabel: String { hour == nil ? "\(day.rawValue) · 지금" : "\(day.rawValue) · \(hour!)시" }
 
     // 선택한 시간에 열려 있나?
-    func isOpen(_ e: EventItem) -> Bool {
-        if let h = hour { return e.isOpen(on: day, hour: h) }
-        if day == .today { return status(of: e, nowMinutes: nowMinutes()).isLive }
-        let h = Calendar.current.component(.hour, from: Date())
-        return e.isOpen(on: day, hour: h)
+    func isOpen(_ event: EventItem) -> Bool {
+        if let selectedHour = hour { return event.isOpen(on: day, hour: selectedHour) }
+        if day == .today { return status(of: event, nowMinutes: nowMinutes()).isLive }
+        let currentHour = Calendar.current.component(.hour, from: Date())
+        return event.isOpen(on: day, hour: currentHour)
     }
-    func runsThatDay(_ e: EventItem) -> Bool { e.days.contains(day) }
+    func runsThatDay(_ event: EventItem) -> Bool { event.days.contains(day) }
 
     // 지도에 보여줄 행사 = 전체 행사에서 조건 4개를 차례로 걸러낸 것
     var shown: [EventItem] {
         store.events
-            .filter { e in picked.map { e.tags.contains($0) } ?? true }   // 행사가 가진 카테고리 중 하나라도 맞으면
+            .filter { event in picked.map { event.tags.contains($0) } ?? true }   // 행사가 가진 카테고리 중 하나라도 맞으면
             .filter { query.isEmpty || matches($0, query) }
             .filter { $0.latitude != 0 }                       // 위치 없는 행사는 지도에서만 빼기
             .filter { !openOnly || isOpen($0) }
     }
 
     // 검색어에 걸리는지 (EventItem.matches 는 MapSearchView.swift 맨 아래에 있어요)
-    func matches(_ e: EventItem, _ q: String) -> Bool { e.matches(q) }
+    func matches(_ event: EventItem, _ searchQuery: String) -> Bool { event.matches(searchQuery) }
 
     // 칩 선택 → 지도는 지금 자리 그대로 두고, 핀만 바꾸고 개수 안내 (확대·이동 안 함)
     func showPicked() {
         let me = location.coordinate ?? defaultCenter
-        guard let c = picked else {                                     // "전체"
+        guard let category = picked else {                              // "전체"
             let all = shown
             flash(all.isEmpty ? "행사가 없어요" : "전체 \(all.count)곳")
             return
         }
         let list = shown
         if list.isEmpty {
-            let all = store.events.filter { $0.tags.contains(c) }
-            flash(all.isEmpty ? "\(c.rawValue) 행사가 없어요"
-                              : "\(c.rawValue) \(all.count)곳은 위치 정보가 없어요 · 추천 탭에서 볼 수 있어요")
+            let all = store.events.filter { $0.tags.contains(category) }
+            flash(all.isEmpty ? "\(category.rawValue) 행사가 없어요"
+                              : "\(category.rawValue) \(all.count)곳은 위치 정보가 없어요 · 추천 탭에서 볼 수 있어요")
             return
         }
         let near = list.filter { meters(me, $0.coordinate) < 10_000 }
-        flash(near.isEmpty ? "\(c.rawValue) \(list.count)곳 (전국)" : "내 주변 \(c.rawValue) \(near.count)곳")
+        flash(near.isEmpty ? "\(category.rawValue) \(list.count)곳 (전국)" : "내 주변 \(category.rawValue) \(near.count)곳")
     }
     func flash(_ text: String?) {
         noticeTask?.cancel()
@@ -106,13 +106,13 @@ struct MapHomeView: View {
         // $position: '$'를 붙이면 값을 읽기만 하는 게 아니라 지도가 직접 바꿀 수도 있게 연결(Binding)돼요
         Map(position: $position, scope: mapScope) {
             UserAnnotation()
-            ForEach(shown) { e in
-                let open = isOpen(e)
-                Annotation(e.title, coordinate: e.coordinate, anchor: .center) {
-                    Button { selected = e } label: {
+            ForEach(shown) { pinEvent in
+                let open = isOpen(pinEvent)
+                Annotation(pinEvent.title, coordinate: pinEvent.coordinate, anchor: .center) {
+                    Button { selected = pinEvent } label: {
                         // 칩으로 고른 카테고리가 이 행사에 있으면 그 색·아이콘으로 표시
-                        EventPin(category: picked.flatMap { e.tags.contains($0) ? $0 : nil } ?? e.category,
-                                 live: open, dimmed: !open, highlighted: focusedID == e.id)
+                        EventPin(category: picked.flatMap { pinEvent.tags.contains($0) ? $0 : nil } ?? pinEvent.category,
+                                 live: open, dimmed: !open, highlighted: focusedID == pinEvent.id)
                     }
                     .buttonStyle(.plain)
                 }
@@ -121,9 +121,9 @@ struct MapHomeView: View {
         // 카테고리 칩을 누르면 핀만 걸러지고 개수 안내가 떠요 (지도는 움직이지 않음)
         .onChange(of: picked) { _, _ in showPicked() }
         // 타자를 멈추고 0.6초 지나면 자동으로 결과 위치로 이동
-        .onChange(of: query) { _, q in
+        .onChange(of: query) { _, newQuery in
             searchTask?.cancel()
-            guard !q.trimmingCharacters(in: .whitespaces).isEmpty else { return }   // 비워질 땐 핀 강조 유지 (결과 하나 고른 경우)
+            guard !newQuery.trimmingCharacters(in: .whitespaces).isEmpty else { return }   // 비워질 땐 핀 강조 유지 (결과 하나 고른 경우)
             focusedID = nil                                                          // 새 검색어 → 이전 강조 지우기
             searchTask = Task {
                 try? await Task.sleep(for: .milliseconds(600))
@@ -148,9 +148,9 @@ struct MapHomeView: View {
         .mapScope(mapScope)                                       // 지도와 버튼이 같은 이름표(mapScope)를 쓰게 묶기
         .toolbar(.hidden, for: .navigationBar)
         // 핀 탭 → 바로 상세 (아래에서 올라오는 시트)
-        .sheet(item: $selected) { e in
+        .sheet(item: $selected) { selectedEvent in
             NavigationStack {
-                EventDetailView(event: e)
+                EventDetailView(event: selectedEvent)
                     .navigationDestination(for: EventItem.self) { EventDetailView(event: $0) }
                     .toolbar {
                         ToolbarItem(placement: .topBarLeading) {
@@ -167,14 +167,14 @@ struct MapHomeView: View {
         .fullScreenCover(isPresented: $showSearch) {
             MapSearchView(
                 initialQuery: query,
-                onSubmit: { q in                         // 키보드 '검색' · 최근 검색어 → 그 검색어로 지도 걸러 보기
-                    query = q
+                onSubmit: { submittedQuery in            // 키보드 '검색' · 최근 검색어 → 그 검색어로 지도 걸러 보기
+                    query = submittedQuery
                     moveCamera(to: shown)
                 },
-                onSelect: { e in                         // 결과 하나 → 검색어는 비우고 그 행사로 이동 + 핀 강조
+                onSelect: { chosenEvent in               // 결과 하나 → 검색어는 비우고 그 행사로 이동 + 핀 강조
                     query = ""
-                    focusedID = e.id
-                    moveCamera(to: [e])
+                    focusedID = chosenEvent.id
+                    moveCamera(to: [chosenEvent])
                 })
             .environmentObject(store)
         }
@@ -228,8 +228,8 @@ struct MapHomeView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     Chip(label: "전체", on: picked == nil) { picked = nil }
-                    ForEach(EventCategory.allCases) { c in
-                        Chip(label: c.rawValue, on: picked == c) { picked = c }
+                    ForEach(EventCategory.allCases) { category in
+                        Chip(label: category.rawValue, on: picked == category) { picked = category }
                     }
                 }
             }
@@ -247,8 +247,8 @@ struct MapHomeView: View {
                 }
                 .buttonStyle(.plain)
                 Spacer()
-                if let n = notice {                                    // 잠깐 뜨는 안내
-                    Text(n).font(.caption.bold()).foregroundStyle(Color.onInk)
+                if let noticeText = notice {                           // 잠깐 뜨는 안내
+                    Text(noticeText).font(.caption.bold()).foregroundStyle(Color.onInk)
                         .lineLimit(1)
                         .padding(.horizontal, 12).frame(height: 32)
                         .background(Color.ink.opacity(0.85), in: Capsule())

@@ -13,7 +13,7 @@ import SwiftUI
 struct PosterImage: View {
     let event: EventItem
     var body: some View {
-        if let s = event.posterURL, let url = URL(string: s) {
+        if let posterURLString = event.posterURL, let url = URL(string: posterURLString) {
             AsyncImage(url: url) { img in
                 img.resizable().scaledToFill()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

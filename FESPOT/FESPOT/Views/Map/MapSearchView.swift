@@ -133,16 +133,16 @@ struct MapSearchView: View {
                     Text("검색 결과가 없어요").font(.subheadline).foregroundStyle(Color.inkSub)
                         .padding(20)
                 }
-                ForEach(results) { e in
-                    Button { select(e) } label: {
+                ForEach(results) { resultEvent in
+                    Button { select(resultEvent) } label: {
                         HStack(spacing: 12) {
-                            Image(systemName: e.category.icon).font(.subheadline).foregroundStyle(.white)
+                            Image(systemName: resultEvent.category.icon).font(.subheadline).foregroundStyle(.white)
                                 .frame(width: 36, height: 36)
-                                .background(e.category.color, in: Circle())
+                                .background(resultEvent.category.color, in: Circle())
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(e.title).font(.body.bold()).foregroundStyle(Color.ink)
+                                Text(resultEvent.title).font(.body.bold()).foregroundStyle(Color.ink)
                                     .lineLimit(1).truncationMode(.tail)
-                                Text("\(e.placeTypeLabel) · \(e.dateRange)").font(.caption).foregroundStyle(Color.inkSub)
+                                Text("\(resultEvent.placeTypeLabel) · \(resultEvent.dateRange)").font(.caption).foregroundStyle(Color.inkSub)
                                     .lineLimit(1)
                             }
                             Spacer()
@@ -162,16 +162,16 @@ struct MapSearchView: View {
     // ---------- 동작 ----------
     // 검색어로 지도 보기 → 최근 검색에 저장하고 닫기
     func submit(_ word: String) {
-        let w = word.trimmingCharacters(in: .whitespaces)
-        if !w.isEmpty { addRecent(w) }
-        onSubmit(w)
+        let trimmedWord = word.trimmingCharacters(in: .whitespaces)
+        if !trimmedWord.isEmpty { addRecent(trimmedWord) }
+        onSubmit(trimmedWord)
         dismiss()
     }
 
     // 결과 하나 고르기 → 행사 이름을 최근 검색에 저장하고 닫기
-    func select(_ e: EventItem) {
-        addRecent(e.title)
-        onSelect(e)
+    func select(_ event: EventItem) {
+        addRecent(event.title)
+        onSelect(event)
         dismiss()
     }
 
@@ -189,7 +189,7 @@ struct MapSearchView: View {
 // 이름·장소·지역·종류·세부유형 어디든 걸리면 검색 결과 (지도 · 검색 화면에서 같이 씀)
 extension EventItem {
     func matches(_ query: String) -> Bool {
-        let t = query.trimmingCharacters(in: .whitespaces)
-        return [title, place, region, category.rawValue, subType].contains { $0.localizedCaseInsensitiveContains(t) }
+        let trimmedQuery = query.trimmingCharacters(in: .whitespaces)
+        return [title, place, region, category.rawValue, subType].contains { $0.localizedCaseInsensitiveContains(trimmedQuery) }
     }
 }

@@ -18,7 +18,7 @@ struct GalleryImage: View {
     let src: String?
     let event: EventItem
     var body: some View {
-        if let s = src, let url = URL(string: s) {
+        if let urlString = src, let url = URL(string: urlString) {
             AsyncImage(url: url) { img in
                 img.resizable().scaledToFill()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -46,9 +46,9 @@ struct GalleryFullScreen: View {
         ZStack(alignment: .topTrailing) {
             Color.black.ignoresSafeArea()
             TabView(selection: $index) {
-                ForEach(Array(sources.enumerated()), id: \.offset) { i, src in
+                ForEach(Array(sources.enumerated()), id: \.offset) { photoIndex, src in
                     // 지금 보는 사진만 배율(zoom)과 연결, 나머지는 원래 크기
-                    ZoomableImage(src: src, event: event, scale: i == index ? $zoom : .constant(1)).tag(i)
+                    ZoomableImage(src: src, event: event, scale: photoIndex == index ? $zoom : .constant(1)).tag(photoIndex)
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: sources.count > 1 && zoom == 1 ? .always : .never))
@@ -97,18 +97,18 @@ struct ZoomableImage: View {
                 .offset(offset)
                 .gesture(
                     MagnifyGesture()
-                        .onChanged { v in
+                        .onChanged { magnifyValue in
                             let base = pinchStart ?? scale
                             pinchStart = base
-                            scale = min(GalleryFullScreen.maxZoom, max(GalleryFullScreen.minZoom, base * v.magnification))
+                            scale = min(GalleryFullScreen.maxZoom, max(GalleryFullScreen.minZoom, base * magnifyValue.magnification))
                         }
                         .onEnded { _ in pinchStart = nil }
                 )
                 .gesture(
                     DragGesture()
-                        .onChanged { v in
-                            offset = clamped(CGSize(width: lastOffset.width + v.translation.width,
-                                                    height: lastOffset.height + v.translation.height), in: geo.size)
+                        .onChanged { dragValue in
+                            offset = clamped(CGSize(width: lastOffset.width + dragValue.translation.width,
+                                                    height: lastOffset.height + dragValue.translation.height), in: geo.size)
                         }
                         .onEnded { _ in lastOffset = offset },
                     including: scale > 1 ? .all : .subviews      // 확대 안 했으면 이동 끄기 → 옆 넘기기 가능
@@ -125,14 +125,14 @@ struct ZoomableImage: View {
     }
 
     // 확대한 만큼만 움직일 수 있게 제한 (배율 2배면 화면 절반까지)
-    func clamped(_ o: CGSize, in size: CGSize) -> CGSize {
+    func clamped(_ proposedOffset: CGSize, in size: CGSize) -> CGSize {
         let maxX = (scale - 1) * size.width / 2
         let maxY = (scale - 1) * size.height / 2
-        return CGSize(width: min(maxX, max(-maxX, o.width)), height: min(maxY, max(-maxY, o.height)))
+        return CGSize(width: min(maxX, max(-maxX, proposedOffset.width)), height: min(maxY, max(-maxY, proposedOffset.height)))
     }
 
     @ViewBuilder var picture: some View {
-        if let s = src, let url = URL(string: s) {
+        if let urlString = src, let url = URL(string: urlString) {
             AsyncImage(url: url) { phase in
                 switch phase {
                 case .success(let img): img.resizable().scaledToFit()          // 잘리지 않게 "맞추기"

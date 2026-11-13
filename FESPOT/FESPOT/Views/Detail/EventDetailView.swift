@@ -31,7 +31,7 @@ struct EventDetailView: View {
     // 첫 장 = 대표 포스터, 그다음 = 관광공사에 올라온 홍보 이미지 (중복 제외). nil = 자동 생성 포스터
     var gallery: [String?] {
         var arr: [String?] = [event.posterURL]
-        for u in event.extraImageURLs + extraImages where u != event.posterURL && !arr.contains(u) { arr.append(u) }
+        for imageURL in event.extraImageURLs + extraImages where imageURL != event.posterURL && !arr.contains(imageURL) { arr.append(imageURL) }
         return arr
     }
 
@@ -54,26 +54,26 @@ struct EventDetailView: View {
     }
 
     var body: some View {
-        let st = status(of: event, nowMinutes: nowMinutes())
+        let eventStatus = status(of: event, nowMinutes: nowMinutes())
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 // 옆으로 넘기는 사진들 (탭하거나 두 손가락으로 벌리면 전체 화면)
                 TabView(selection: $page) {
-                    ForEach(Array(gallery.enumerated()), id: \.offset) { i, src in
+                    ForEach(Array(gallery.enumerated()), id: \.offset) { index, src in
                         Color.clear
                             .overlay { GalleryImage(src: src, event: event) }
                             .clipped()
                             .contentShape(Rectangle())
-                            .onTapGesture { fullIndex = FullIndex(id: i) }
+                            .onTapGesture { fullIndex = FullIndex(id: index) }
                             // 두 손가락으로 벌리면 → 확대할 수 있는 전체 화면 열기
                             .simultaneousGesture(
-                                MagnifyGesture().onEnded { v in
-                                    if v.magnification > 1.1 { fullIndex = FullIndex(id: i) }
+                                MagnifyGesture().onEnded { magnifyValue in
+                                    if magnifyValue.magnification > 1.1 { fullIndex = FullIndex(id: index) }
                                 }
                             )
                             .accessibilityAddTraits(.isButton)
-                            .accessibilityLabel("사진 \(i + 1), 전체 화면에서 확대해 보기")
-                            .tag(i)
+                            .accessibilityLabel("사진 \(index + 1), 전체 화면에서 확대해 보기")
+                            .tag(index)
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: gallery.count > 1 ? .always : .never))
@@ -106,7 +106,7 @@ struct EventDetailView: View {
                             .padding(.horizontal, 10).padding(.vertical, 4)
                             .background(event.category.color.opacity(0.15), in: Capsule())
                             .foregroundStyle(Color.ink)
-                        if let b = event.badge { BadgeView(badge: b) }
+                        if let badge = event.badge { BadgeView(badge: badge) }
                     }
                     Text(event.title).font(.title2.bold()).lineLimit(2)
                     Text("\(event.place) · \(distanceText(meters(me, event.coordinate)))")
@@ -114,8 +114,8 @@ struct EventDetailView: View {
                 }
 
                 HStack(spacing: 10) {
-                    Circle().fill(st.isLive ? Color.liveGreen : st.color).frame(width: 10, height: 10)
-                    Text(st.text).font(.headline).foregroundStyle(st.color)
+                    Circle().fill(eventStatus.isLive ? Color.liveGreen : eventStatus.color).frame(width: 10, height: 10)
+                    Text(eventStatus.text).font(.headline).foregroundStyle(eventStatus.color)
                     Spacer()
                 }
                 .padding(16)
@@ -132,12 +132,12 @@ struct EventDetailView: View {
                         InfoRow(label: "요일", value: Day.allCases.filter { event.days.contains($0) }.map(\.rawValue).joined(separator: " · "))
                     }
                     InfoRow(label: "기간", value: event.period)
-                    if let v = intro?.place { InfoRow(label: "장소", value: v) }
+                    if let place = intro?.place { InfoRow(label: "장소", value: place) }
                     InfoRow(label: "요금", value: intro?.fee ?? event.price)
-                    if let v = intro?.discount { InfoRow(label: "할인", value: v) }
-                    if let v = intro?.age { InfoRow(label: "연령", value: v) }
-                    if let v = intro?.duration { InfoRow(label: "소요", value: v) }
-                    if let v = intro?.booking { InfoRow(label: "예매", value: v) }
+                    if let discount = intro?.discount { InfoRow(label: "할인", value: discount) }
+                    if let age = intro?.age { InfoRow(label: "연령", value: age) }
+                    if let duration = intro?.duration { InfoRow(label: "소요", value: duration) }
+                    if let booking = intro?.booking { InfoRow(label: "예매", value: booking) }
                     if let host = intro?.host { InfoRow(label: "주최", value: host) }
                     // API가 전화번호를 주면 → 번호를 보여주고, 누르면 전화 앱으로 (Utilities/PhoneNumber.swift)
                     if let phone = PhoneNumber(from: intro?.hostTel) ?? PhoneNumber(from: commonTel) {
@@ -170,13 +170,17 @@ struct EventDetailView: View {
                         .tracking(0)
                 }.padding(.vertical, 8)
 
-                if let ov = overview {
+                if let overviewText = overview {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("행사 소개").font(.headline)
+<<<<<<< Updated upstream
                         
                         Text(ov)
                             .font(.subheadline)
                             .foregroundStyle(Color.ink)
+=======
+                        Text(overviewText).font(.subheadline).foregroundStyle(Color.ink)
+>>>>>>> Stashed changes
                             .lineSpacing(3)
                             .lineLimit(showAllOverview ? nil : 5)
                             .tracking(-0.3)
@@ -190,9 +194,14 @@ struct EventDetailView: View {
                         .foregroundStyle(Color.inkSub)
                     }
                 }
+<<<<<<< Updated upstream
 
                 if let hp = homepage {
                     Link(destination: hp) {
+=======
+                if let homepageURL = homepage {
+                    Link(destination: homepageURL) {
+>>>>>>> Stashed changes
                         Label("공식 홈페이지에서 더 보기", systemImage: "safari")
                             .font(.subheadline.bold())
                             .frame(maxWidth: .infinity)
@@ -205,7 +214,7 @@ struct EventDetailView: View {
                 
                 Map(initialPosition: .region(MKCoordinateRegion(center: event.coordinate, latitudinalMeters: 800, longitudinalMeters: 800)),
                     interactionModes: []) {
-                    Annotation(event.title, coordinate: event.coordinate) { EventPin(category: event.category, live: st.isLive) }
+                    Annotation(event.title, coordinate: event.coordinate) { EventPin(category: event.category, live: eventStatus.isLive) }
                 }
                 .frame(height: 150)
                 .clipShape(RoundedRectangle(cornerRadius: 18))
@@ -252,9 +261,9 @@ struct EventDetailView: View {
                     // 옆으로 넘기는 포스터 카드 (카드 탭 → 그 행사 상세로 이동)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(alignment: .top, spacing: 14) {
-                            ForEach(nearby) { n in
-                                NavigationLink(value: n) {
-                                    NearbyCard(event: n, from: event.coordinate)
+                            ForEach(nearby) { nearbyEvent in
+                                NavigationLink(value: nearbyEvent) {
+                                    NearbyCard(event: nearbyEvent, from: event.coordinate)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -285,7 +294,7 @@ struct EventDetailView: View {
             }
             Button("취소", role: .cancel) {}
         }
-        .fullScreenCover(item: $fullIndex) { f in GalleryFullScreen(sources: gallery, start: f.id, event: event) }
+        .fullScreenCover(item: $fullIndex) { selection in GalleryFullScreen(sources: gallery, start: selection.id, event: event) }
         .fullScreenCover(isPresented: $showBigMap) {
             EventMapFullScreen(event: event, live: status(of: event, nowMinutes: nowMinutes()).isLive)
                 .environmentObject(location)
@@ -296,17 +305,17 @@ struct EventDetailView: View {
     // TourAPI 행사면 홍보 이미지 · 소개글 · 홈페이지를 추가로 불러오기
     func loadExtra() async {
         if event.id.hasPrefix("culture-") { await loadCultureExtra(); return }   // 공연·전시는 따로
-        guard let cid = event.contentId, let key = TourAPI.serviceKey else { return }
+        guard let contentId = event.contentId, let key = TourAPI.serviceKey else { return }
         loadingExtra = true
-        async let imgs = TourAPI.fetchImages(contentId: cid, key: key)
-        async let info = TourAPI.fetchCommon(contentId: cid, key: key)
-        async let detail = TourAPI.fetchIntro(contentId: cid, key: key)      // 3개를 동시에 요청
-        let (i, c, d) = await (imgs, info, detail)
-        extraImages = i
-        homepage = c.homepage
-        overview = c.overview
-        commonTel = c.tel
-        intro = d
+        async let imgs = TourAPI.fetchImages(contentId: contentId, key: key)
+        async let info = TourAPI.fetchCommon(contentId: contentId, key: key)
+        async let detail = TourAPI.fetchIntro(contentId: contentId, key: key)      // 3개를 동시에 요청
+        let (fetchedImages, commonInfo, introInfo) = await (imgs, info, detail)
+        extraImages = fetchedImages
+        homepage = commonInfo.homepage
+        overview = commonInfo.overview
+        commonTel = commonInfo.tel
+        intro = introInfo
         loadingExtra = false
     }
 
@@ -315,13 +324,13 @@ struct EventDetailView: View {
         guard let key = Culture.serviceKey else { return }
         loadingExtra = true
         let seq = String(event.id.dropFirst("culture-".count))
-        if let d = await Culture.fetchDetail(seq: seq, key: key) {
-            intro = TourAPI.FestivalIntro(playtime: nil, fee: d.price, discount: nil,
-                                          host: nil, hostTel: d.phone,
-                                          age: nil, place: d.address, duration: nil, booking: nil, program: nil)
-            homepage = d.link
-            overview = d.contents
-            if let img = d.image { extraImages = [img] }
+        if let cultureDetail = await Culture.fetchDetail(seq: seq, key: key) {
+            intro = TourAPI.FestivalIntro(playtime: nil, fee: cultureDetail.price, discount: nil,
+                                          host: nil, hostTel: cultureDetail.phone,
+                                          age: nil, place: cultureDetail.address, duration: nil, booking: nil, program: nil)
+            homepage = cultureDetail.link
+            overview = cultureDetail.contents
+            if let img = cultureDetail.image { extraImages = [img] }
         }
         loadingExtra = false
     }

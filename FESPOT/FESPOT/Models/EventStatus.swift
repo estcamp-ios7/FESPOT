@@ -18,29 +18,29 @@ struct EventStatus {
 }
 
 // 지금 이 순간 기준 상태
-func status(of e: EventItem, nowMinutes m: Int) -> EventStatus {
-    if e.allDay {
-        return e.days.contains(.today)
-            ? EventStatus(text: "진행 중 · \(e.untilNote)까지", color: .liveText, isLive: true, rank: 0)
-            : EventStatus(text: "\(e.startNote) 시작", color: .soonText, isLive: false, rank: 2)
+func status(of event: EventItem, nowMinutes minutes: Int) -> EventStatus {
+    if event.allDay {
+        return event.days.contains(.today)
+            ? EventStatus(text: "진행 중 · \(event.untilNote)까지", color: .liveText, isLive: true, rank: 0)
+            : EventStatus(text: "\(event.startNote) 시작", color: .soonText, isLive: false, rank: 2)
     }
-    guard e.days.contains(.today) else { return EventStatus(text: "오늘은 쉬어요", color: .inkSub, isLive: false, rank: 3) }
-    let start = e.startHour * 60, end = e.endHour * 60
-    if m >= start && m < end {
-        let left = end - m
+    guard event.days.contains(.today) else { return EventStatus(text: "오늘은 쉬어요", color: .inkSub, isLive: false, rank: 3) }
+    let start = event.startHour * 60, end = event.endHour * 60
+    if minutes >= start && minutes < end {
+        let left = end - minutes
         let leftText = left >= 60 ? "\(left / 60)시간 \(left % 60)분" : "\(left)분"
-        return EventStatus(text: "진행 중 · \(e.endHour)시까지 (\(leftText) 남음)", color: .liveText, isLive: true, rank: 0)
+        return EventStatus(text: "진행 중 · \(event.endHour)시까지 (\(leftText) 남음)", color: .liveText, isLive: true, rank: 0)
     }
-    if m < start {
-        let until = start - m
+    if minutes < start {
+        let until = start - minutes
         return until <= 60
             ? EventStatus(text: "\(until)분 뒤 시작", color: .soonText, isLive: false, rank: 1)
-            : EventStatus(text: "\(e.startHour)시 시작", color: .soonText, isLive: false, rank: 2)
+            : EventStatus(text: "\(event.startHour)시 시작", color: .soonText, isLive: false, rank: 2)
     }
     return EventStatus(text: "오늘 종료", color: .endText, isLive: false, rank: 3)
 }
 
 func nowMinutes() -> Int {
-    let c = Calendar.current.dateComponents([.hour, .minute], from: Date())
-    return (c.hour ?? 0) * 60 + (c.minute ?? 0)
+    let components = Calendar.current.dateComponents([.hour, .minute], from: Date())
+    return (components.hour ?? 0) * 60 + (components.minute ?? 0)
 }

@@ -52,12 +52,12 @@ struct EventItem: Identifiable, Hashable {
 // 예) "진안고원 김치보쌈축제" → [먹거리, 축제]  /  "한강 달빛 야시장" → [플리마켓, 야경]
 extension EventItem {
     var tags: Set<EventCategory> {
-        var t: Set<EventCategory> = [category]
+        var foundTags: Set<EventCategory> = [category]
         let text = title + " " + subType
-        for (c, words) in TourAPI.keywords where words.contains(where: { text.contains($0) }) { t.insert(c) }
+        for (matchedCategory, words) in TourAPI.keywords where words.contains(where: { text.contains($0) }) { foundTags.insert(matchedCategory) }
         if ["축제", "페스티벌", "페스타", "festival", "Festival", "FESTIVAL"].contains(where: { title.contains($0) }) {
-            t.insert(.festival)
+            foundTags.insert(.festival)
         }
-        return t
+        return foundTags
     }
 }

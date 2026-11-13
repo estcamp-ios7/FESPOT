@@ -77,11 +77,11 @@ enum Notifier {
 
         // 근처: 내 위치에서 관심 반경 안 (위치를 모르면 내가 사는 시·도)
         if Kind.nearby.isOn {
-            let me = CLLocationManager().location?.coordinate        // 마지막으로 알려진 내 위치
+            let myLocation = CLLocationManager().location?.coordinate        // 마지막으로 알려진 내 위치
             let radius = Double(profile.radiusKm) * 1000
-            let near = fresh.filter { e in
-                if let me, e.latitude != 0 { return meters(me, e.coordinate) <= radius }
-                return e.region == profile.sido
+            let near = fresh.filter { event in
+                if let myLocation, event.latitude != 0 { return meters(myLocation, event.coordinate) <= radius }
+                return event.region == profile.sido
             }
             if let first = near.min(by: { ($0.startDate ?? .distantFuture) < ($1.startDate ?? .distantFuture) }) {
                 let month = first.startDate.map { Calendar.current.component(.month, from: $0) }
@@ -95,13 +95,13 @@ enum Notifier {
         // 관심: 내 관심 카테고리 중 새 행사가 가장 많은 것 하나로 묶어서
         if Kind.interest.isOn, !profile.interests.isEmpty {
             let hits = profile.interests
-                .map { c in (c, fresh.filter { $0.tags.contains(c) }) }
+                .map { category in (category, fresh.filter { $0.tags.contains(category) }) }
                 .filter { !$0.1.isEmpty }
                 .max { $0.1.count < $1.1.count }
-            if let (cat, list) = hits {
-                await send(id: "interest-\(cat.rawValue)-\(list[0].id)",
+            if let (category, matches) = hits {
+                await send(id: "interest-\(category.rawValue)-\(matches[0].id)",
                            title: "[관심 행사 알림]",
-                           body: "\(cat.rawValue) 관련 새로운 행사가 올라왔습니다.\n\(summary(list))")
+                           body: "\(category.rawValue) 관련 새로운 행사가 올라왔습니다.\n\(summary(matches))")
             }
         }
     }
@@ -128,14 +128,14 @@ enum Notifier {
         let sample = events.first
         let month = Calendar.current.component(.month, from: Date())
         let name = sample.map { "‘\($0.title)’" } ?? "‘한강 야시장’"
-        let cat = profile.interests.first?.rawValue ?? EventCategory.festival.rawValue
+        let categoryName = profile.interests.first?.rawValue ?? EventCategory.festival.rawValue
         let items: [(Kind, String)] = [
             (.nearby, "\(month)월 주최되는 새로운 행사가 올라왔습니다.\n\(name)"),
-            (.interest, "\(cat) 관련 새로운 행사가 올라왔습니다.\n\(name)")
+            (.interest, "\(categoryName) 관련 새로운 행사가 올라왔습니다.\n\(name)")
         ]
-        for (i, item) in items.enumerated() where item.0.isOn {
+        for (order, item) in items.enumerated() where item.0.isOn {
             await send(id: "preview-\(item.0.rawValue)", title: "[\(item.0.title)]", body: item.1,
-                       trigger: UNTimeIntervalNotificationTrigger(timeInterval: Double(2 + i * 2), repeats: false))
+                       trigger: UNTimeIntervalNotificationTrigger(timeInterval: Double(2 + order * 2), repeats: false))
         }
     }
 
@@ -145,8 +145,8 @@ enum Notifier {
         content.title = title
         content.body = body
         content.sound = .default
-        let t = trigger ?? UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
-        try? await center.add(UNNotificationRequest(identifier: id, content: content, trigger: t))
+        let notificationTrigger = trigger ?? UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        try? await center.add(UNNotificationRequest(identifier: id, content: content, trigger: notificationTrigger))
     }
 }
 

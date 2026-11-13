@@ -19,8 +19,8 @@ struct PhoneNumber {
         guard let text, !text.isEmpty else { return nil }
         // 숫자 2~4자리 + (- ) . 공백) + 3~4자리 + 구분 + 4자리  /  또는 1588-1234 같은 대표번호
         let pattern = #"(\d{2,4})[\s\-\).]*(\d{3,4})[\s\-.]*(\d{4})|(1\d{3})[\s\-.]*(\d{4})"#
-        guard let r = text.range(of: pattern, options: .regularExpression) else { return nil }
-        let found = String(text[r])
+        guard let matchRange = text.range(of: pattern, options: .regularExpression) else { return nil }
+        let found = String(text[matchRange])
         let digits = found.filter(\.isNumber)
         guard (8...12).contains(digits.count), let url = URL(string: "tel:\(digits)") else { return nil }
         self.url = url
@@ -28,15 +28,15 @@ struct PhoneNumber {
     }
 
     // 숫자만 있는 번호에 "-" 넣기: 0212345678 → 02-1234-5678, 01012345678 → 010-1234-5678, 15881234 → 1588-1234
-    static func format(_ d: String) -> String {
-        let c = Array(d)
-        func s(_ a: Int, _ b: Int) -> String { String(c[a..<b]) }
-        if d.count == 8 { return "\(s(0, 4))-\(s(4, 8))" }                                // 대표번호
-        if d.hasPrefix("02") {                                                             // 서울
-            return d.count == 9 ? "02-\(s(2, 5))-\(s(5, 9))" : "02-\(s(2, 6))-\(s(6, c.count))"
+    static func format(_ digits: String) -> String {
+        let characters = Array(digits)
+        func slice(_ start: Int, _ end: Int) -> String { String(characters[start..<end]) }
+        if digits.count == 8 { return "\(slice(0, 4))-\(slice(4, 8))" }                                // 대표번호
+        if digits.hasPrefix("02") {                                                             // 서울
+            return digits.count == 9 ? "02-\(slice(2, 5))-\(slice(5, 9))" : "02-\(slice(2, 6))-\(slice(6, characters.count))"
         }
-        if d.count == 10 { return "\(s(0, 3))-\(s(3, 6))-\(s(6, 10))" }
-        if d.count == 11 { return "\(s(0, 3))-\(s(3, 7))-\(s(7, 11))" }
-        return d
+        if digits.count == 10 { return "\(slice(0, 3))-\(slice(3, 6))-\(slice(6, 10))" }
+        if digits.count == 11 { return "\(slice(0, 3))-\(slice(3, 7))-\(slice(7, 11))" }
+        return digits
     }
 }

@@ -51,15 +51,15 @@ struct RegionPicksView: View {
         case .interest:                                   // 관심 분야 먼저 → 이름순
             let interests = store.profile.interests
             return base.sorted {
-                let a = interests.contains($0.category) ? 0 : 1, b = interests.contains($1.category) ? 0 : 1
-                return a != b ? a < b : $0.title < $1.title
+                let lhsRank = interests.contains($0.category) ? 0 : 1, rhsRank = interests.contains($1.category) ? 0 : 1
+                return lhsRank != rhsRank ? lhsRank < rhsRank : $0.title < $1.title
             }
         case .distance:                                   // 내 위치에서 가까운 순
             return base.sorted { meters(me, $0.coordinate) < meters(me, $1.coordinate) }
         case .date:                                       // 시작일 빠른 순 (같으면 먼저 끝나는 순)
             return base.sorted {
-                let s0 = $0.startDate ?? .distantFuture, s1 = $1.startDate ?? .distantFuture
-                if s0 != s1 { return s0 < s1 }
+                let lhsStart = $0.startDate ?? .distantFuture, rhsStart = $1.startDate ?? .distantFuture
+                if lhsStart != rhsStart { return lhsStart < rhsStart }
                 return ($0.endDate ?? .distantFuture) < ($1.endDate ?? .distantFuture)
             }
         }
@@ -70,9 +70,9 @@ struct RegionPicksView: View {
             VStack(alignment: .leading, spacing: 16) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(regionChips, id: \.name) { c in
-                            Chip(label: c.name == store.profile.sido ? "📍\(c.name) \(c.count)" : "\(c.name) \(c.count)",
-                                 on: region == c.name) { region = c.name }
+                        ForEach(regionChips, id: \.name) { chip in
+                            Chip(label: chip.name == store.profile.sido ? "📍\(chip.name) \(chip.count)" : "\(chip.name) \(chip.count)",
+                                 on: region == chip.name) { region = chip.name }
                         }
                     }
                     .padding(.horizontal, 16)
@@ -102,8 +102,8 @@ struct RegionPicksView: View {
                         .frame(maxWidth: .infinity).padding(.vertical, 40)
                 }
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 20) {
-                    ForEach(list) { e in
-                        NavigationLink(value: e) { PosterCard(event: e) }.buttonStyle(.plain)
+                    ForEach(list) { picksEvent in
+                        NavigationLink(value: picksEvent) { PosterCard(event: picksEvent) }.buttonStyle(.plain)
                     }
                 }
                 .padding(.horizontal, 16)

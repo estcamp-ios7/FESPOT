@@ -22,8 +22,8 @@ struct SavedView: View {
                 .padding(.top, 80)
             }
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 20) {
-                ForEach(list) { e in
-                    NavigationLink(value: e) { PosterCard(event: e) }.buttonStyle(.plain)
+                ForEach(list) { savedEvent in
+                    NavigationLink(value: savedEvent) { PosterCard(event: savedEvent) }.buttonStyle(.plain)
                 }
             }
             .padding(16)

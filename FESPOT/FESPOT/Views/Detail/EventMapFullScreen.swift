@@ -28,8 +28,8 @@ struct EventMapFullScreen: View {
         _position = State(initialValue: .region(Self.eventRegion(event)))
     }
 
-    static func eventRegion(_ e: EventItem) -> MKCoordinateRegion {
-        MKCoordinateRegion(center: e.coordinate, latitudinalMeters: 1200, longitudinalMeters: 1200)
+    static func eventRegion(_ targetEvent: EventItem) -> MKCoordinateRegion {
+        MKCoordinateRegion(center: targetEvent.coordinate, latitudinalMeters: 1200, longitudinalMeters: 1200)
     }
 
     var body: some View {

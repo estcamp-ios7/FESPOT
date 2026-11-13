@@ -12,8 +12,8 @@ struct Avatar: View {
     var size: CGFloat = 72
     var body: some View {
         Group {
-            if let d = profile.photo, let ui = UIImage(data: d) {
-                Image(uiImage: ui).resizable().scaledToFill()
+            if let photoData = profile.photo, let uiImage = UIImage(data: photoData) {
+                Image(uiImage: uiImage).resizable().scaledToFill()
             } else {
                 Text(String(profile.nickname.prefix(1)).isEmpty ? "?" : String(profile.nickname.prefix(1)))
                     .font(.system(size: size * 0.42, weight: .bold)).foregroundStyle(.white)

@@ -50,15 +50,15 @@ struct ProfileEditView: View {
             }
             Section("관심 있는 행사") {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 8)], spacing: 8) {
-                    ForEach(EventCategory.allCases) { c in
-                        let on = draft.interests.contains(c)
+                    ForEach(EventCategory.allCases) { category in
+                        let isSelected = draft.interests.contains(category)
                         Button {
-                            if on { draft.interests.removeAll { $0 == c } } else { draft.interests.append(c) }
+                            if isSelected { draft.interests.removeAll { $0 == category } } else { draft.interests.append(category) }
                         } label: {
-                            Label(c.rawValue, systemImage: c.icon).font(.subheadline.bold())
+                            Label(category.rawValue, systemImage: category.icon).font(.subheadline.bold())
                                 .frame(maxWidth: .infinity, minHeight: 40)
-                                .background(on ? c.color : Color.gray.opacity(0.12), in: Capsule())
-                                .foregroundStyle(on ? Color.white : Color.ink)
+                                .background(isSelected ? category.color : Color.gray.opacity(0.12), in: Capsule())
+                                .foregroundStyle(isSelected ? Color.white : Color.ink)
                                 .labelIconToTitleSpacing(15)
                         }
                         .buttonStyle(.plain)
@@ -84,8 +84,8 @@ struct ProfileEditView: View {
         .onChange(of: photoItem) { _, item in
             Task {
                 if let data = try? await item?.loadTransferable(type: Data.self),
-                   let ui = UIImage(data: data),
-                   let small = ui.jpegData(compressionQuality: 0.6) {          // 저장 용량 줄이기
+                   let uiImage = UIImage(data: data),
+                   let small = uiImage.jpegData(compressionQuality: 0.6) {          // 저장 용량 줄이기
                     draft.photo = small
                 }
             }

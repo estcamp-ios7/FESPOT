@@ -25,8 +25,8 @@ struct TimeFilterSheet: View {
             .pickerStyle(.segmented)
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
                 TimeButton(label: "지금", on: hour == nil) { hour = nil }
-                ForEach(hours, id: \.self) { h in
-                    TimeButton(label: "\(h)시", on: hour == h) { hour = h }
+                ForEach(hours, id: \.self) { hourOption in
+                    TimeButton(label: "\(hourOption)시", on: hour == hourOption) { hour = hourOption }
                 }
             }
             Button { dismiss() } label: {

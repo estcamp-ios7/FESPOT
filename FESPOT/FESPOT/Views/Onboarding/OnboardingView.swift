@@ -38,8 +38,8 @@ struct OnboardingView: View {
 
                     // 카테고리 타일
                     LazyVGrid(columns: columns, spacing: 12) {
-                        ForEach(EventCategory.allCases) { c in
-                            CategoryTile(category: c, on: picked.contains(c)) { toggle(c) }
+                        ForEach(EventCategory.allCases) { category in
+                            CategoryTile(category: category, on: picked.contains(category)) { toggle(category) }
                         }
                     }
                 }
@@ -75,8 +75,8 @@ struct OnboardingView: View {
         .onAppear { picked = store.profile.interests }      // 이미 고른 게 있으면 체크된 채로
     }
 
-    func toggle(_ c: EventCategory) {
-        if let i = picked.firstIndex(of: c) { picked.remove(at: i) } else { picked.append(c) }
+    func toggle(_ category: EventCategory) {
+        if let index = picked.firstIndex(of: category) { picked.remove(at: index) } else { picked.append(category) }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 }

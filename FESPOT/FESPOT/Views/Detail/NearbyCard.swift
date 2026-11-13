@@ -15,10 +15,10 @@ struct NearbyCard: View {
 
     // 진행 여부를 짧게: "진행 중" / "12.11 시작" / "19시 시작" / "오늘 종료"
     var progress: (text: String, color: Color) {
-        let st = status(of: event, nowMinutes: nowMinutes())
-        if st.isLive { return ("진행 중", .liveText) }
+        let eventStatus = status(of: event, nowMinutes: nowMinutes())
+        if eventStatus.isLive { return ("진행 중", .liveText) }
         if event.allDay { return ("\(event.startNote) 시작", .soonText) }
-        return (st.text, st.color)
+        return (eventStatus.text, eventStatus.color)
     }
 
     var body: some View {

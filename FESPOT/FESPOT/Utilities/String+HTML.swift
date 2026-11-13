@@ -16,8 +16,8 @@ extension String {
         let map: [(String, String)] = [("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""), ("&#39;", "'"), ("&apos;", "'"),
                    ("&times;", "×"), ("&middot;", "·"), ("&nbsp;", " "), ("&lsquo;", "‘"), ("&rsquo;", "’"),
                    ("&ldquo;", "“"), ("&rdquo;", "”"), ("&hellip;", "…"), ("&amp;", "&")]
-        var t = self
-        for (k, v) in map { t = t.replacingOccurrences(of: k, with: v) }
-        return t
+        var result = self
+        for (entity, character) in map { result = result.replacingOccurrences(of: entity, with: character) }
+        return result
     }
 }

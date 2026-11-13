@@ -19,8 +19,8 @@ struct PosterCard: View {
                     .overlay { PosterImage(event: event) }
                     .clipShape(RoundedRectangle(cornerRadius: 14))
                     .contentShape(RoundedRectangle(cornerRadius: 14))   // 터치 영역도 포스터 틀 크기로 딱 맞춤
-                if let b = event.badge {
-                    BadgeView(badge: b).padding(8)
+                if let badge = event.badge {
+                    BadgeView(badge: badge).padding(8)
                 }
             }
             .overlay(alignment: .topTrailing) {
