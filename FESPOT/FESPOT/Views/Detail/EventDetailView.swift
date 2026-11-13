@@ -167,29 +167,42 @@ struct EventDetailView: View {
                         .lineSpacing(3)
                         .foregroundStyle(Color.ink)
                         .lineLimit(10)
-                    
+                        .tracking(0)
                 }.padding(.vertical, 8)
 
                 if let ov = overview {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("행사 소개").font(.headline)
-                        Text(ov).font(.subheadline).foregroundStyle(Color.ink)
+                        
+                        Text(ov)
+                            .font(.subheadline)
+                            .foregroundStyle(Color.ink)
                             .lineSpacing(3)
                             .lineLimit(showAllOverview ? nil : 5)
-                        Button(showAllOverview ? "접기" : "더 보기") { withAnimation { showAllOverview.toggle() } }
-                            .font(.subheadline.bold()).foregroundStyle(Color.inkSub)
+                            .tracking(-0.3)
+                        
+                        Button(showAllOverview ? "접기" : "더 보기") {
+                            withAnimation {
+                                showAllOverview.toggle()
+                            }
+                        }
+                        .font(.subheadline.bold())
+                        .foregroundStyle(Color.inkSub)
                     }
                 }
+
                 if let hp = homepage {
                     Link(destination: hp) {
                         Label("공식 홈페이지에서 더 보기", systemImage: "safari")
-                            .font(.subheadline.bold()).frame(maxWidth: .infinity).frame(height: 46)
+                            .font(.subheadline.bold())
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 46)
                             .background(Color.card, in: RoundedRectangle(cornerRadius: 14))
                             .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.gray.opacity(0.35)))
                             .foregroundStyle(Color.ink)
                     }
                 }
-
+                
                 Map(initialPosition: .region(MKCoordinateRegion(center: event.coordinate, latitudinalMeters: 800, longitudinalMeters: 800)),
                     interactionModes: []) {
                     Annotation(event.title, coordinate: event.coordinate) { EventPin(category: event.category, live: st.isLive) }
