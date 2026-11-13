@@ -51,15 +51,18 @@ struct MeView: View {
                         Text("프로필 편집에서 고르면 추천 탭에 먼저 보여드려요").font(.subheadline).foregroundStyle(Color.inkSub)
                     } else {
                         ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(profile.interests) { interest in
-                                    Label(interest.rawValue, systemImage: interest.icon)
-                                        .font(.subheadline.bold())
-                                        .padding(.horizontal, 10)
-                                         .padding(.vertical, 6)
-                                        .background(interest.color.opacity(0.15), in: Capsule())
-                                        .foregroundStyle(Color.ink)
-                                        .labelIconToTitleSpacing(5)
+                            HStack(spacing: 0) {
+                                ForEach(profile.interests, id: \.self) { interest in
+                                    HStack(spacing: 4) {
+                                        Image(systemName: interest.icon)
+                                            .font(.subheadline)
+                                        Text(interest.rawValue)
+                                    }
+                                    .font(.subheadline.bold())
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(interest.color.opacity(0.15), in: Capsule())
+                                    .foregroundStyle(Color.ink)
                                 }
                             }
                         }
@@ -68,7 +71,9 @@ struct MeView: View {
                 .padding(18)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.card, in: RoundedRectangle(cornerRadius: 20))
-
+                                .padding(18)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.card, in: RoundedRectangle(cornerRadius: 20))
                 // 알림 켜기/끄기 (NotificationSettingsCard.swift)
                 NotificationSettingsCard()
 

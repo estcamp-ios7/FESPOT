@@ -55,11 +55,14 @@ struct ProfileEditView: View {
                         Button {
                             if isSelected { draft.interests.removeAll { $0 == category } } else { draft.interests.append(category) }
                         } label: {
-                            Label(category.rawValue, systemImage: category.icon).font(.subheadline.bold())
-                                .frame(maxWidth: .infinity, minHeight: 40)
-                                .background(isSelected ? category.color : Color.gray.opacity(0.12), in: Capsule())
-                                .foregroundStyle(isSelected ? Color.white : Color.ink)
-                                .labelIconToTitleSpacing(15)
+                            HStack(spacing: 4) {
+                                Image(systemName: category.icon)
+                                Text(category.rawValue)
+                            }
+                            .font(.subheadline.bold())
+                            .frame(maxWidth: .infinity, minHeight: 40)
+                            .background(isSelected ? category.color : Color.gray.opacity(0.12), in: Capsule())
+                            .foregroundStyle(isSelected ? Color.white : Color.ink)
                         }
                         .buttonStyle(.plain)
                     }
