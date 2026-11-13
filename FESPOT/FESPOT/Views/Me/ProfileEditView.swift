@@ -23,18 +23,34 @@ struct ProfileEditView: View {
             Section {
                 HStack {
                     Spacer()
-                    VStack(spacing: 10) {
+                    VStack(spacing: 16) {
+                        // 프로필 아바타 이미지
                         Avatar(profile: draft, size: 96)
+                        
+                        // 1. 사진 바꾸기 버튼 (기교 없이 폰트만 적용)
                         PhotosPicker(selection: $photoItem, matching: .images) {
-                            Text("사진 바꾸기").font(.subheadline.bold())
+                            Text("사진 바꾸기")
+                                .font(.subheadline.bold())
                         }
+                        .buttonStyle(.plain)
+                        
+                        // 2. 사진 지우기 버튼 (사진이 있을 때만 노출)
                         if draft.photo != nil {
-                            Button("사진 지우기", role: .destructive) { draft.photo = nil }.font(.caption)
+                            Button(role: .destructive) {
+                                draft.photo = nil
+                                photoItem = nil // 선택된 피커 아이템 초기화
+                            } label: {
+                                Text("사진 지우기")
+                                    .font(.caption)
+                                    .foregroundStyle(Color.red)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                     Spacer()
                 }
             }
+            
             Section("기본 정보") {
                 TextField("닉네임", text: $draft.nickname)
             }
