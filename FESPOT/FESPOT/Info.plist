@@ -2,8 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>내 주변 행사를 지도에 보여주고 거리를 알려드리기 위해 현재 위치를 사용해요.</string>
 	<key>TMAP_API_KEY</key>
 	<string>fiVsBhuMMB8tENknhbiut1Mu9kJYIOug3OO7cvuA</string>
 	<key>TOUR_API_KEY</key>
