@@ -16,7 +16,7 @@ struct EventDetailView: View {
     @EnvironmentObject var store: EventStore
     @EnvironmentObject var location: LocationManager
     let event: EventItem                           // 보여줄 행사 (바깥에서 넘겨받음)
-    @State private var showMapChoice = false       // true 면 '어떤 지도로 열까요?' 메뉴가 뜸
+    @State private var showRoute = false           // true 면 앱 안 길찾기(RouteView)가 뜸
     @State private var showBigMap = false          // true 면 큰 지도(EventMapFullScreen)가 뜸
     @State private var page = 0                    // 지금 보고 있는 사진 번호
     @State private var fullIndex: FullIndex?       // 전체 화면으로 볼 사진 번호
@@ -252,13 +252,20 @@ struct EventDetailView: View {
                 .accessibilityAddTraits(.isButton)
                 .accessibilityAction { showBigMap = true }
 
-                Button { showMapChoice = true } label: {
+                // 길찾기 → 앱 안에서 TMAP 경로 보기 (위치 정보가 없는 행사는 누를 수 없어요)
+                Button { showRoute = true } label: {
                     Label("길찾기", systemImage: "location.north.line.fill")
                         .font(.headline).frame(maxWidth: .infinity).frame(height: 52)
-                        .background(Color.ink, in: RoundedRectangle(cornerRadius: 14))
-                        .foregroundStyle(Color.onInk)
+                        .background(event.latitude != 0 ? Color.ink : Color.gray.opacity(0.3),
+                                    in: RoundedRectangle(cornerRadius: 14))
+                        .foregroundStyle(event.latitude != 0 ? Color.onInk : Color.inkSub)
                 }
                 .buttonStyle(.plain)
+                .disabled(event.latitude == 0)
+                if event.latitude == 0 {
+                    Text("이 행사는 위치 정보가 없어 길찾기를 할 수 없어요")
+                        .font(.caption).foregroundStyle(Color.inkSub)
+                }
 
                 let nearby = store.events
                     .filter { $0.id != event.id && $0.latitude != 0 && meters(event.coordinate, $0.coordinate) < 2000 }
@@ -303,12 +310,10 @@ struct EventDetailView: View {
                 .accessibilityLabel("찜하기")
             }
         }
-        // 길찾기 버튼 → 아래에서 올라오는 지도 앱 선택 메뉴
-        .confirmationDialog("어떤 지도로 길찾기 할까요?", isPresented: $showMapChoice, titleVisibility: .visible) {
-            ForEach(MapApp.allCases) { app in
-                Button(app.rawValue) { openDirections(in: app) }
-            }
-            Button("취소", role: .cancel) {}
+        // 길찾기 버튼 → 앱 안 길찾기 화면 (Views/Detail/RouteView.swift)
+        .fullScreenCover(isPresented: $showRoute) {
+            RouteView(event: event)
+                .environmentObject(location)
         }
         .fullScreenCover(item: $fullIndex) { selection in GalleryFullScreen(sources: gallery, start: selection.id, event: event) }
         .fullScreenCover(isPresented: $showBigMap) {
@@ -349,12 +354,6 @@ struct EventDetailView: View {
             if let img = cultureDetail.image { extraImages = [img] }
         }
         loadingExtra = false
-    }
-
-    // 고른 지도 앱으로 길찾기 (Services/Directions.swift) — 2km 이내면 도보, 더 멀면 자동차
-    func openDirections(in app: MapApp) {
-        let walk = location.coordinate.map { meters($0, event.coordinate) <= 2_000 } ?? true
-        Task { await app.open(for: event, walk: walk) }
     }
 }
 

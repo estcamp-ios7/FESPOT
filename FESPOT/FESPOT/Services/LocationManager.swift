@@ -27,6 +27,15 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         manager.requestWhenInUseAuthorization()
         manager.startUpdatingLocation()
     }
+    // 길찾기 [안내 시작] 중에만 위치를 더 정확하고 자주 받기 (배터리를 더 써서 평소엔 원래대로)
+    func startNavigationAccuracy() {
+        manager.desiredAccuracy = kCLLocationAccuracyBest
+        manager.distanceFilter = 5
+    }
+    func stopNavigationAccuracy() {
+        manager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
+        manager.distanceFilter = 30
+    }
     // ↓ 아래 함수들은 iOS가 알아서 불러줘요 (delegate = '일이 생기면 나한테 알려줘')
     // 권한이 바뀌었을 때 (사용자가 '허용'을 누르면 여기로 옴)
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
