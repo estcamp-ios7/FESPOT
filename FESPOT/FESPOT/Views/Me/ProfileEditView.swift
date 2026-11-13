@@ -77,18 +77,34 @@ struct ProfileEditView: View {
                     spacing: 8
                 ) {
                     ForEach(EventCategory.allCases) { category in
-                        InterestCategoryButton(
-                            category: category,
-                            isSelected: draft.interests.contains(category)
-                        ) {
-                            if draft.interests.contains(category) {
+                        let isSelected = draft.interests.contains(category)
+
+                        Button {
+                            if isSelected {
                                 draft.interests.removeAll {
                                     $0 == category
                                 }
                             } else {
                                 draft.interests.append(category)
                             }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: category.icon)
+                                Text(category.rawValue)
+                            }
+                            .font(.subheadline.bold())
+                            .frame(maxWidth: .infinity, minHeight: 40)
+                            .background(
+                                isSelected
+                                ? category.color
+                                : Color.gray.opacity(0.12),
+                                in: Capsule()
+                            )
+                            .foregroundStyle(
+                                isSelected ? Color.white : Color.ink
+                            )
                         }
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.vertical, 4)
@@ -136,8 +152,17 @@ struct ProfileEditView: View {
         .fullScreenCover(
             isPresented: $isShowingPhotoDeleteView
         ) {
-            PhotoGalleryDeleteView(
-                onClose: {
+            ProfilePhotoDeleteView(
+                onSelect: { selectedPhoto in
+                    // 선택한 사진으로 프로필 사진 변경
+                    draft.photo = selectedPhoto
+                    photoItem = nil
+                    isShowingPhotoDeleteView = false
+                },
+                onDelete: {
+                    // 프로필 사진 제거
+                    draft.photo = nil
+                    photoItem = nil
                     isShowingPhotoDeleteView = false
                 }
             )
@@ -145,18 +170,17 @@ struct ProfileEditView: View {
     }
 }
 
-// MARK: - 사진첩 삭제 화면
+// MARK: - 프로필 사진 삭제 및 변경 화면
 
-private struct PhotoGalleryDeleteView: View {
+private struct ProfilePhotoDeleteView: View {
     @Environment(\.dismiss) private var dismiss
 
-    let onClose: () -> Void
+    let onSelect: (Data) -> Void
+    let onDelete: () -> Void
 
     @State private var photos: [PHAsset] = []
-    @State private var selectedPhotos: Set<String> = []
     @State private var hasPermission = false
-    @State private var isLoading = true
-    @State private var showDeleteError = false
+    @State private var permissionDenied = false
 
     private let columns = [
         GridItem(.flexible(), spacing: 2),
@@ -167,9 +191,23 @@ private struct PhotoGalleryDeleteView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if isLoading {
-                    ProgressView("사진을 불러오는 중...")
-                } else if !hasPermission {
+                if hasPermission {
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: 2) {
+                            ForEach(
+                                photos,
+                                id: \.localIdentifier
+                            ) { asset in
+
+                                PhotoThumbnail(asset: asset) {
+                                    selectPhoto(asset)
+                                }
+                                .aspectRatio(1, contentMode: .fill)
+                                .clipped()
+                            }
+                        }
+                    }
+                } else if permissionDenied {
                     ContentUnavailableView(
                         "사진 접근 권한이 필요합니다",
                         systemImage: "photo",
@@ -177,42 +215,17 @@ private struct PhotoGalleryDeleteView: View {
                             "설정에서 FESPOT의 사진 접근을 허용해 주세요."
                         )
                     )
-                } else if photos.isEmpty {
-                    ContentUnavailableView(
-                        "사진이 없습니다",
-                        systemImage: "photo"
-                    )
                 } else {
-                    ScrollView {
-                        LazyVGrid(
-                            columns: columns,
-                            spacing: 2
-                        ) {
-                            ForEach(
-                                photos,
-                                id: \.localIdentifier
-                            ) { photo in
-
-                                PhotoGalleryThumbnail(
-                                    asset: photo,
-                                    isSelected: selectedPhotos.contains(
-                                        photo.localIdentifier
-                                    )
-                                ) {
-                                    toggleSelection(photo)
-                                }
-                            }
-                        }
-                    }
+                    ProgressView("사진첩 불러오는 중...")
                 }
             }
             .navigationTitle("사진첩")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                // 좌측 상단 닫기
+                // 좌측 상단 취소
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
-                        onClose()
+                        dismiss()
                     } label: {
                         Image(systemName: "xmark")
                     }
@@ -220,73 +233,50 @@ private struct PhotoGalleryDeleteView: View {
 
                 // 우측 상단 삭제
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("삭제") {
-                        deleteSelectedPhotos()
+                    Button("삭제", role: .destructive) {
+                        onDelete()
                     }
-                    .foregroundStyle(.red)
-                    .disabled(selectedPhotos.isEmpty)
                 }
             }
-            .alert(
-                "사진 삭제 실패",
-                isPresented: $showDeleteError
-            ) {
-                Button("확인", role: .cancel) {}
-            } message: {
-                Text("사진을 삭제하지 못했습니다. 다시 시도해 주세요.")
-            }
-            .onAppear {
+            .task {
                 loadPhotos()
             }
         }
     }
 
-    // 사진 선택 및 해제
-    private func toggleSelection(_ photo: PHAsset) {
-        let id = photo.localIdentifier
+    // MARK: 사진첩 접근 권한 확인
 
-        if selectedPhotos.contains(id) {
-            selectedPhotos.remove(id)
-        } else {
-            selectedPhotos.insert(id)
-        }
-    }
-
-    // 사진첩 불러오기
     private func loadPhotos() {
         let status = PHPhotoLibrary.authorizationStatus(
             for: .readWrite
         )
 
-        if status == .notDetermined {
+        if status == .authorized || status == .limited {
+            fetchPhotos()
+
+        } else if status == .notDetermined {
             PHPhotoLibrary.requestAuthorization(
                 for: .readWrite
             ) { newStatus in
                 DispatchQueue.main.async {
-                    hasPermission =
-                        newStatus == .authorized ||
-                        newStatus == .limited
-
-                    fetchPhotos()
+                    if newStatus == .authorized ||
+                        newStatus == .limited {
+                        fetchPhotos()
+                    } else {
+                        permissionDenied = true
+                    }
                 }
             }
         } else {
-            hasPermission =
-                status == .authorized ||
-                status == .limited
-
-            fetchPhotos()
+            permissionDenied = true
         }
     }
 
-    // 사진 목록 가져오기
-    private func fetchPhotos() {
-        guard hasPermission else {
-            isLoading = false
-            return
-        }
+    // MARK: 사진 목록 가져오기
 
+    private func fetchPhotos() {
         let options = PHFetchOptions()
+
         options.sortDescriptors = [
             NSSortDescriptor(
                 key: "creationDate",
@@ -306,39 +296,41 @@ private struct PhotoGalleryDeleteView: View {
         }
 
         photos = fetchedPhotos
-        isLoading = false
+        hasPermission = true
     }
 
-    // 선택한 사진 삭제
-    private func deleteSelectedPhotos() {
-        let selectedAssets = PHAsset.fetchAssets(
-            withLocalIdentifiers: Array(selectedPhotos),
-            options: nil
-        )
+    // MARK: 선택한 사진을 프로필에 적용
 
-        PHPhotoLibrary.shared().performChanges {
-            PHAssetChangeRequest.deleteAssets(
-                selectedAssets
-            )
-        } completionHandler: { success, error in
+    private func selectPhoto(_ asset: PHAsset) {
+        let options = PHImageRequestOptions()
+        options.isNetworkAccessAllowed = true
+        options.deliveryMode = .highQualityFormat
+        options.version = .current
+
+        PHImageManager.default().requestImageDataAndOrientation(
+            for: asset,
+            options: options
+        ) { data, _, _, _ in
+
+            guard let data,
+                  let image = UIImage(data: data),
+                  let jpegData = image.jpegData(
+                    compressionQuality: 0.6
+                  ) else {
+                return
+            }
+
             DispatchQueue.main.async {
-                if success {
-                    selectedPhotos.removeAll()
-                    fetchPhotos()
-                } else {
-                    print("사진 삭제 오류:", error?.localizedDescription ?? "")
-                    showDeleteError = true
-                }
+                onSelect(jpegData)
             }
         }
     }
 }
 
-// MARK: - 사진 썸네일
+// MARK: - 사진첩 썸네일
 
-private struct PhotoGalleryThumbnail: View {
+private struct PhotoThumbnail: View {
     let asset: PHAsset
-    let isSelected: Bool
     let onTap: () -> Void
 
     @State private var image: UIImage?
@@ -347,7 +339,7 @@ private struct PhotoGalleryThumbnail: View {
         Button {
             onTap()
         } label: {
-            ZStack(alignment: .topTrailing) {
+            GeometryReader { geometry in
                 Group {
                     if let image {
                         Image(uiImage: image)
@@ -355,41 +347,27 @@ private struct PhotoGalleryThumbnail: View {
                             .scaledToFill()
                     } else {
                         Rectangle()
-                            .fill(Color.gray.opacity(0.2))
+                            .fill(Color.gray.opacity(0.15))
+                            .overlay {
+                                ProgressView()
+                            }
                     }
                 }
                 .frame(
-                    width: thumbnailSize,
-                    height: thumbnailSize
+                    width: geometry.size.width,
+                    height: geometry.size.height
                 )
                 .clipped()
-
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(.blue, .white)
-                        .padding(6)
-                }
-            }
-            .overlay {
-                if isSelected {
-                    Rectangle()
-                        .stroke(.blue, lineWidth: 3)
+                .onAppear {
+                    loadThumbnail(size: geometry.size)
                 }
             }
         }
         .buttonStyle(.plain)
-        .onAppear {
-            loadThumbnail()
-        }
     }
 
-    private var thumbnailSize: CGFloat {
-        (UIScreen.main.bounds.width - 4) / 3
-    }
-
-    // 사진 썸네일 불러오기
-    private func loadThumbnail() {
+    // 썸네일 이미지 불러오기
+    private func loadThumbnail(size: CGSize) {
         let options = PHImageRequestOptions()
         options.deliveryMode = .opportunistic
         options.resizeMode = .fast
@@ -397,47 +375,18 @@ private struct PhotoGalleryThumbnail: View {
         PHImageManager.default().requestImage(
             for: asset,
             targetSize: CGSize(
-                width: 300,
-                height: 300
+                width: size.width * 2,
+                height: size.height * 2
             ),
             contentMode: .aspectFill,
             options: options
         ) { result, _ in
+
             if let result {
                 DispatchQueue.main.async {
                     image = result
                 }
             }
         }
-    }
-}
-
-// MARK: - 관심 행사 버튼
-
-private struct InterestCategoryButton: View {
-    let category: EventCategory
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: category.icon)
-
-                Text(category.rawValue)
-            }
-            .font(.subheadline.bold())
-            .frame(maxWidth: .infinity, minHeight: 40)
-            .background(
-                isSelected
-                    ? category.color
-                    : Color.gray.opacity(0.12),
-                in: Capsule()
-            )
-            .foregroundStyle(
-                isSelected ? Color.white : Color.ink
-            )
-        }
-        .buttonStyle(.plain)
     }
 }
