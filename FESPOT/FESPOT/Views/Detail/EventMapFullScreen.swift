@@ -6,7 +6,7 @@
 //
 //  · 두 손가락으로 확대·축소, 한 손가락으로 끌어서 이동, 두 손가락 돌리기 모두 돼요
 //  · 오른쪽 아래 버튼: 내 위치로 이동 / '행사 위치로' 버튼: 다시 행사 핀으로 돌아오기
-//  · 아래 '길찾기' 버튼은 상세 화면과 똑같이 네이버 · 카카오 · Apple 지도 중 골라서 열어요
+//  · 아래 '길찾기' 버튼은 상세 화면과 똑같이 앱 안 길찾기(RouteView, TMAP 경로)를 열어요
 //
 
 import SwiftUI
@@ -18,7 +18,7 @@ struct EventMapFullScreen: View {
     @EnvironmentObject var location: LocationManager
     @Environment(\.dismiss) private var dismiss
     @State private var position: MapCameraPosition
-    @State private var showMapChoice = false
+    @State private var showRoute = false             // true 면 앱 안 길찾기(RouteView)가 뜸
     @Namespace private var mapScope
 
     init(event: EventItem, live: Bool) {
@@ -52,14 +52,9 @@ struct EventMapFullScreen: View {
         .mapScope(mapScope)
         .safeAreaInset(edge: .top) { topBar }
         .safeAreaInset(edge: .bottom) { bottomBar }
-        .confirmationDialog("어떤 지도로 길찾기 할까요?", isPresented: $showMapChoice, titleVisibility: .visible) {
-            ForEach(MapApp.allCases) { app in
-                Button(app.rawValue) {
-                    let walk = location.coordinate.map { meters($0, event.coordinate) <= 2_000 } ?? true
-                    Task { await app.open(for: event, walk: walk) }
-                }
-            }
-            Button("취소", role: .cancel) {}
+        .fullScreenCover(isPresented: $showRoute) {
+            RouteView(event: event)
+                .environmentObject(location)
         }
     }
 
@@ -97,13 +92,14 @@ struct EventMapFullScreen: View {
 
     // 맨 아래: 길찾기
     var bottomBar: some View {
-        Button { showMapChoice = true } label: {
+        Button { showRoute = true } label: {
             Label("길찾기", systemImage: "location.north.line.fill")
                 .font(.headline).frame(maxWidth: .infinity).frame(height: 52)
                 .background(Color.ink, in: RoundedRectangle(cornerRadius: 14))
                 .foregroundStyle(Color.onInk)
         }
         .buttonStyle(.plain)
+        .disabled(event.latitude == 0)
         .padding(.horizontal, 16).padding(.bottom, 8)       // 내 위치 버튼은 자동으로 이 버튼 바로 위에 놓여요
     }
 }
