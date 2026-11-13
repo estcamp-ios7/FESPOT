@@ -17,9 +17,10 @@ struct SavedView: View {
             if list.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "heart").font(.largeTitle).foregroundStyle(Color.inkSub)
-                    Text("가장 먼저볼 관심 카테고리를 선택하세요").foregroundStyle(Color.inkSub)
+                    Text("마음에 드는 행사에 하트를 누르면\n 이곳에서 모아볼 수 있어요.").foregroundStyle(Color.inkSub)
                 }
                 .padding(.top, 80)
+                .multilineTextAlignment(.center)
             }
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 20) {
                 ForEach(list) { savedEvent in
