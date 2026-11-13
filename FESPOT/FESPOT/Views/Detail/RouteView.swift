@@ -4,13 +4,15 @@
 //
 //  앱 안 길찾기 화면 — TMAP 경로를 우리 지도에 그려서 보여주고 안내해요 (다른 지도 앱으로 안 넘어가요)
 //
-//  · 위: 닫기 · "내 위치 → 행사 이름" · 도보 / 자동차 탭 (탭마다 예상 시간)
-//  · 가운데: 지도 + 코랄색 경로선 + 도착 핀
+//  · 위: 닫기 · "출발지 → 행사 이름" · 도보 / 자동차 탭 (탭마다 예상 시간)
+//      - 출발지는 기본이 '내 위치', 출발지 줄을 누르면 지도에서 직접 고를 수 있어요 (StartPointPicker.swift)
+//  · 가운데: 지도 + 코랄색 경로선 + 출발 핀(고른 경우) + 도착 핀
 //  · 아래: 총 시간·거리 · [안내 시작] · 펼치면 단계별 안내 목록
 //  · [안내 시작] 하면
 //      - 지도가 내 위치를 따라가고, 위에 "다음 안내까지 남은 거리 + 안내 문구"를 크게 보여줘요
 //      - 안내 지점 20m 안에 들어오면 다음 단계로 넘어가요
 //      - 경로선에서 50m 넘게 벗어나면 경로를 다시 받아요 (너무 자주 요청하지 않게 15초 간격)
+//        단, 지도에서 고른 출발지면 다시 계산하지 않고, 출발지에서 멀면 "출발지까지 …"를 먼저 보여줘요
 //      - 행사 위치 30m 안에 오면 "도착했어요"
 //  · 경로 받는 코드는 Services/TmapRouteService.swift
 //
@@ -33,6 +35,8 @@ struct RouteView: View {
     @State private var stepIndex = 0                               // 지금 향하고 있는 안내 단계
     @State private var arrived = false
     @State private var lastRefresh = Date.distantPast              // 마지막으로 경로를 다시 받은 시각
+    @State private var startPoint: StartPoint?                     // 지도에서 고른 출발지 (nil = 내 위치)
+    @State private var showStartPicker = false
     @Namespace private var mapScope
 
     static let stepReachMeters = 20.0       // 이만큼 가까워지면 다음 안내로
@@ -40,7 +44,13 @@ struct RouteView: View {
     static let arriveMeters = 30.0          // 행사 위치까지 이만큼 남으면 도착
     static let refreshInterval = 15.0       // 경로 다시 받기 최소 간격 (초)
 
+    static let farFromStartMeters = 100.0   // 고른 출발지에서 이만큼 떨어져 있으면 "출발지까지 …" 먼저 안내
+
     var route: TmapRoute? { routes[mode] }
+
+    // 경로의 출발 좌표: 지도에서 고른 곳이 있으면 그곳, 없으면 내 위치
+    var startCoordinate: CLLocationCoordinate2D? { startPoint?.coordinate ?? location.coordinate }
+    var startName: String { startPoint?.name ?? "내 위치" }
 
     // 내 위치가 바뀔 때마다 안내를 갱신하려고 쓰는 값 (좌표 자체는 비교가 안 돼서 글자로)
     var locationKey: String {
@@ -54,6 +64,14 @@ struct RouteView: View {
             if let route {
                 MapPolyline(coordinates: route.coordinates)
                     .stroke(Color.coral, style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
+            }
+            // 지도에서 고른 출발지 (내 위치 출발일 땐 파란 점만)
+            if let startPoint {
+                Annotation(startPoint.name, coordinate: startPoint.coordinate) {
+                    Circle().fill(Color.liveGreen).frame(width: 18, height: 18)
+                        .overlay(Circle().stroke(.white, lineWidth: 3))
+                        .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+                }
             }
             Annotation(event.title, coordinate: event.coordinate) {
                 EventPin(category: event.category, live: false, highlighted: true)
@@ -80,6 +98,19 @@ struct RouteView: View {
             stepIndex = 0
             Task { await load(mode) }
         }
+        // 출발지를 바꾸면 받아 둔 경로를 비우고 새 출발지 기준으로 다시 받기
+        .onChange(of: startPoint) { _, _ in
+            routes = [:]
+            errorText = nil
+            stepIndex = 0
+            arrived = false
+            Task { await loadFirstRoute() }
+        }
+        .fullScreenCover(isPresented: $showStartPicker) {
+            StartPointPicker(initialCenter: startPoint?.coordinate ?? location.coordinate ?? event.coordinate) { picked in
+                startPoint = picked
+            }
+        }
         .onDisappear { location.stopNavigationAccuracy() }
     }
 
@@ -92,8 +123,21 @@ struct RouteView: View {
         VStack(spacing: 10) {
             HStack(spacing: 10) {
                 circleButton("xmark", label: "닫기") { dismiss() }
-                VStack(alignment: .leading, spacing: 2) {
-                    Label("내 위치", systemImage: "location.fill").font(.caption).foregroundStyle(Color.inkSub)
+                VStack(alignment: .leading, spacing: 6) {
+                    // 출발지 줄: 누르면 지도에서 출발지 고르기
+                    Button { showStartPicker = true } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: startPoint == nil ? "location.fill" : "circle.fill")
+                                .font(.caption).foregroundStyle(startPoint == nil ? Color.soonText : Color.liveGreen)
+                            Text(startName).font(.caption.bold()).foregroundStyle(Color.ink).lineLimit(1)
+                            Spacer(minLength: 4)
+                            Text("변경").font(.caption.bold()).foregroundStyle(Color.inkSub)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("출발지 \(startName), 바꾸기")
+                    Divider()
                     Label(event.title, systemImage: "mappin.circle.fill").font(.subheadline.bold())
                         .foregroundStyle(Color.ink).lineLimit(1)
                 }
@@ -142,6 +186,10 @@ struct RouteView: View {
                 if arrived {
                     Text("도착했어요!").font(.title3.bold())
                     Text(event.title).font(.subheadline).foregroundStyle(Color.inkSub).lineLimit(1)
+                } else if let toStart = metersToPickedStart, stepIndex == 0 {
+                    // 지도에서 고른 출발지가 아직 멀면 → 출발지까지 먼저 안내
+                    Text("출발지까지 \(TmapRoute.distanceLabel(toStart))").font(.title3.bold()).monospacedDigit()
+                    Text(startName).font(.subheadline).foregroundStyle(Color.inkSub).lineLimit(2)
                 } else if let step = currentStep {
                     if let left = metersToCurrentStep {
                         Text(TmapRoute.distanceLabel(left)).font(.title2.bold()).monospacedDigit()
@@ -167,12 +215,22 @@ struct RouteView: View {
 
     var bottomPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if location.denied {
-                messageRow("location.slash.fill", "위치 권한이 꺼져 있어 길찾기를 할 수 없어요", button: "설정") {
-                    if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+            // 내 위치에서 출발하는데 위치를 모를 때 → 지도에서 출발지를 직접 고르면 경로를 볼 수 있어요
+            if startPoint == nil && (location.denied || location.coordinate == nil) {
+                if location.denied {
+                    messageRow("location.slash.fill", "위치 권한이 꺼져 있어 내 위치를 알 수 없어요", button: "설정") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                    }
+                } else {
+                    messageRow("location.circle", "내 위치를 찾는 중이에요…", button: nil) {}
                 }
-            } else if location.coordinate == nil {
-                messageRow("location.circle", "내 위치를 찾는 중이에요…", button: nil) {}
+                Button { showStartPicker = true } label: {
+                    Label("지도에서 출발지 고르기", systemImage: "mappin.and.ellipse")
+                        .font(.subheadline.bold()).frame(maxWidth: .infinity).frame(height: 46)
+                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.gray.opacity(0.35)))
+                        .foregroundStyle(Color.ink)
+                }
+                .buttonStyle(.plain)
             } else if let errorText {
                 messageRow("exclamationmark.triangle.fill", errorText, button: "다시 시도") {
                     Task { await load(mode, refresh: true) }
@@ -251,20 +309,22 @@ struct RouteView: View {
     // 경로 받기
     // =====================================================
 
-    // 처음: 2km 이내면 도보, 더 멀면 자동차 탭으로 시작
+    // 처음: 출발지에서 2km 이내면 도보, 더 멀면 자동차 탭으로 시작
     func loadFirstRoute() async {
-        guard let me = location.coordinate else { return }
-        if routes.isEmpty { mode = meters(me, event.coordinate) <= 2_000 ? .walk : .car }
+        guard let start = startCoordinate else { return }
+        if routes.isEmpty { mode = meters(start, event.coordinate) <= 2_000 ? .walk : .car }
         await load(mode)
     }
 
     func load(_ target: RouteMode, refresh: Bool = false) async {
-        guard let me = location.coordinate else { return }
+        guard let start = startCoordinate else { return }
         if !refresh, routes[target] != nil { fitCamera(); return }
+        guard !loadingModes.contains(target) else { return }       // 이미 받는 중이면 또 요청하지 않기
         loadingModes.insert(target)
         defer { loadingModes.remove(target) }
         do {
-            let found = try await TmapRouteService.route(from: me, to: event, mode: target, refresh: refresh)
+            let found = try await TmapRouteService.route(from: start, to: event, mode: target,
+                                                         startName: startName, refresh: refresh)
             routes[target] = found
             if target == mode {
                 errorText = nil
@@ -301,6 +361,13 @@ struct RouteView: View {
         return meters(me, step.coordinate)
     }
 
+    // 지도에서 고른 출발지까지 남은 거리 (100m 넘게 떨어져 있을 때만, 아니면 nil)
+    var metersToPickedStart: Double? {
+        guard let startPoint, let me = location.coordinate else { return nil }
+        let distance = meters(me, startPoint.coordinate)
+        return distance > Self.farFromStartMeters ? distance : nil
+    }
+
     func startNavigation() {
         navigating = true
         arrived = false
@@ -329,8 +396,10 @@ struct RouteView: View {
             stepIndex += 1
         }
 
-        // 경로선에서 너무 멀어지면 다시 계산
-        if distanceToRoute(me, route.coordinates) > Self.offRouteMeters,
+        // 경로선에서 너무 멀어지면 다시 계산 (지도에서 고른 출발지면 안 함 → 출발지로 가는 중일 수 있어서,
+        // 다시 계산하면 고른 출발지가 내 위치로 바뀌어 버려요)
+        if startPoint == nil,
+           distanceToRoute(me, route.coordinates) > Self.offRouteMeters,
            Date().timeIntervalSince(lastRefresh) > Self.refreshInterval {
             lastRefresh = Date()
             Task {

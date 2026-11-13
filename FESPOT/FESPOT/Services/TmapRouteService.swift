@@ -88,8 +88,9 @@ enum TmapRouteService {
     }
 
     // 경로 받기. refresh: true 면 기억해 둔 경로를 무시하고 새로 받아요 (경로를 벗어났을 때)
+    // startName: 출발지 이름 (지도에서 고른 출발지면 그 주소, 아니면 "내 위치")
     static func route(from start: CLLocationCoordinate2D, to event: EventItem, mode: RouteMode,
-                      refresh: Bool = false) async throws -> TmapRoute {
+                      startName: String = "내 위치", refresh: Bool = false) async throws -> TmapRoute {
         guard let key = apiKey else { throw TmapRouteError.noKey }
         let cacheID = cacheKey(start, event, mode)
         if !refresh, let saved = cache[cacheID] { return saved }
@@ -100,12 +101,12 @@ enum TmapRouteService {
         request.setValue(key, forHTTPHeaderField: "appKey")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         // 출발·도착 이름은 TMAP 규칙상 URL 인코딩해서 보내요
-        let startName = "내 위치".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        let endName = event.title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        let encodedStartName = startName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        let encodedEndName = event.title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
         let body: [String: Any] = [
             "startX": start.longitude, "startY": start.latitude,
             "endX": event.longitude, "endY": event.latitude,
-            "startName": startName, "endName": endName,
+            "startName": encodedStartName, "endName": encodedEndName,
             "reqCoordType": "WGS84GEO", "resCoordType": "WGS84GEO"
         ]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
