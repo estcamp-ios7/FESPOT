@@ -10,10 +10,15 @@ import SwiftUI
 struct InfoRow: View {
     let label: String
     let value: String
+    
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text(label).foregroundStyle(Color.inkSub).frame(width: 44, alignment: .leading)
-            Text(value).foregroundStyle(Color.ink)
+        HStack(alignment: .top, spacing: 8) {
+            Text(label)
+                .foregroundStyle(Color.inkSub)
+                .frame(width: 38, alignment: .leading)
+            
+            Text(value)
+                .foregroundStyle(Color.ink)
         }
         .font(.subheadline)
     }

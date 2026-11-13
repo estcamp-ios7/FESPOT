@@ -127,22 +127,48 @@ struct EventDetailView: View {
                         Text("행사 정보").font(.headline)
                         if loadingExtra { ProgressView().scaleEffect(0.8) }
                     }
+                    
                     InfoRow(label: "운영", value: intro?.playtime ?? event.hoursText)
+                    
                     if !event.allDay {
                         InfoRow(label: "요일", value: Day.allCases.filter { event.days.contains($0) }.map(\.rawValue).joined(separator: " · "))
                     }
-                    InfoRow(label: "기간", value: event.period)
-                    if let place = intro?.place { InfoRow(label: "장소", value: place) }
+                    
+                    InfoRow(label: "기간", value: event.period.replacingOccurrences(of: " : ", with: ": "))
+                    
+                    if let place = intro?.place {
+                        InfoRow(label: "장소", value: place.replacingOccurrences(of: " : ", with: ": "))
+                    }
+                    
                     InfoRow(label: "요금", value: intro?.fee ?? event.price)
-                    if let discount = intro?.discount { InfoRow(label: "할인", value: discount) }
-                    if let age = intro?.age { InfoRow(label: "연령", value: age) }
-                    if let duration = intro?.duration { InfoRow(label: "소요", value: duration) }
-                    if let booking = intro?.booking { InfoRow(label: "예매", value: booking) }
-                    if let host = intro?.host { InfoRow(label: "주최", value: host) }
-                    // API가 전화번호를 주면 → 번호를 보여주고, 누르면 전화 앱으로 (Utilities/PhoneNumber.swift)
+                    
+                    if let discount = intro?.discount {
+                        InfoRow(label: "할인", value: discount)
+                    }
+                    
+                    if let age = intro?.age {
+                        InfoRow(label: "연령", value: age)
+                    }
+                    
+                    if let duration = intro?.duration {
+                        InfoRow(label: "소요", value: duration)
+                    }
+                    
+                    if let booking = intro?.booking {
+                        InfoRow(label: "예매", value: booking)
+                    }
+                    
+                    if let host = intro?.host {
+                        InfoRow(label: "주최", value: host)
+                    }
+                    
+                    // API가 전화번호를 주면 → 번호를 보여주고, 누르면 전화 앱으로
                     if let phone = PhoneNumber(from: intro?.hostTel) ?? PhoneNumber(from: commonTel) {
-                        HStack(alignment: .center, spacing: 12) {
-                            Text("전화").foregroundStyle(Color.inkSub).frame(width: 44, alignment: .leading)
+                        HStack(alignment: .center, spacing: 8) {
+                            Text("전화")
+                                .foregroundStyle(Color.inkSub)
+                                .frame(width: 38, alignment: .leading)
+                            
                             Link(destination: phone.url) {
                                 HStack(spacing: 6) {
                                     Image(systemName: "phone.fill").font(.caption)
@@ -158,7 +184,6 @@ struct EventDetailView: View {
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.card, in: RoundedRectangle(cornerRadius: 18))
-
                 VStack(alignment: .leading, spacing: 8) {
                     Text("프로그램").font(.headline)
                     
